@@ -1,9 +1,9 @@
 
 = 5个给你惊喜的linux命令
 :toc: left
-:toc-title: linux
+// :toc-title: linux
 
-          skyler yaoyihao1@gmail.com
+Doc writer yaoyihao1@gmail.com
 
 == 0. 神器 ``ranger ``命令行导航文件系统
 
