@@ -3,7 +3,7 @@
 
 Doc Writer <yaoyihao1@gmail.com>
 
-:toc: right
+:toc:
 
 
 .Lightweight Markup
