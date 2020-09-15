@@ -1,0 +1,123 @@
+
+[toc]
+
+= 5个给你惊喜的linux命令
+Doc Writer <yaoyihao1@gmail.com>
+:toc:
+
+.Lightweight Markup
+****
+Writing languages that let you type less and express more.
+****
+
+== 0. 神器 ``ranger ``命令行导航文件系统
+
+
+``ranger``对于使用命令行浏览文件系统非常有用。您可能需要安装``ranger``才能使用它，但是一旦安装，就可以通过在终端中键入以下命令来运行它。
+
+----
+$ ranger
+----
+___
+    命令行窗口将与其他任何文件管理器一样，但是从左到右而不是从上到下工作。当您使用向左箭头键时，将沿文件夹结构向上移动，而向右箭头键则将沿文件夹结构向下移动。在使用Ranger之前有必要阅读下手册页，以便您习惯使用可用的键盘开关，这样你才能充分使用它，相信我，``它能让你爽``
+___
+
+
+https://github.com/ranger/ranger/wiki/Official-user-guide[ranger官方手册]
+
+image::https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d0c6ed03dc8c4424b9ba7007900284e0~tplv-k3u1fbpfcp-zoom-1.image[aaa]
+
+=== 安装
+mac
+
+----
+$ brew install ranger
+----
+
+linux
+
+----
+sudo apt-get install ranger
+----
+
+=== 配置
+
+----
+$ ranger --copy-config=all
+----
+=== 启动
+
+----
+$ ranger
+----
+
+== 1. 非常有用的命令行快捷键
+
+下面的快捷键是有用的，可以节省你的时间:
+
+* CTRL+U: 剪切命令行所有文本  
+
+* CTRL+K: 剪切从光标开始到行尾的文本
+
+* CTRL+W: 剪切从行首到光标的文本
+
+* CTRL+Y: 粘贴其他命令剪切的文本
+
+* CTRL+E: 移动光标到行尾
+
+* CTRL+A: 移动光标到行首
+
+== 2 SUDO !!
+每次输入一些命令时，然后出现`Permission denied`字样。这时，您都会感激此命令
+实例
+```
+$ apt-get install ranger
+然后提示你没有权限：`Permission denied`。这时你才想起来，要加`sudo`命令，然而还要从新敲一遍刚才的命令文本，好麻烦
+
+所以，现在，你只需输入
+$ sudo !!
+效果正是你要的`sudo apt-get install ranger`
+```
+
+== 3 暂停和重新开始命令
+
+* ctrl+z: 暂停当前工作模式
+
+* fg: 回到暂停的工作模式
+
+假设一个场景：你正在文件中键入文本的过程中，您意识到要在终端中键入另一个命令，但不能这样做，因为在当前模式下正开着文件呢。
+
+怎么办呢：当您按``ctrl+z``时，前台应用程序将暂停，并返回到命令行。然后您可以运行所需的任何命令，并在完成后通过在终端窗口中输入`fg`并按`Enter`返回到先前暂停的会话。
+
+
+== 4 使用nohup运行命令，当从SSH会话注销后，命令依旧执行
+
+如果使用``ssh``命令登录到其他计算机，则``nohup``命令很有用。使用它使用ssh远程登录到另一台计算机并运行需要很长时间的命令，然后退出``ssh``会话，但保持命令运行
+
+要使用``nohup``，您只需键入``nohup``，然后输入以下命令即可
+
+----
+nohup wget http"//xxxx &
+----
+
+
+
+详情参考 https://zhuanlan.zhihu.com/p/59297350[&与nohup的用法]
+
+== 5 使用``nohup``运行命令，当从``ssh``会话注销后，命令依旧执行
+
+如果您已连接到``ssh``服务器，并且希望该命令在``ssh``会话注销后仍保持运行，则``nohup``命令会很好.
+
+假设您要在特定的时间点运行相同的命令，使用``at``命令可以做到这一点。 使用如下
+```
+$ at 10:38 PM Fri
+at> echo 'hello'
+at> CTRL+D
+```
+上面的命令在星期五晚上10:38运行程序``echo`` 。
+
+语法解释：
+语法后面是运行日期和时间，当出现``at>``提示符时，输入要在指定时间运行的命令，``ctrl + d``  键盘快捷键将您带回到光标。日期和时间格式很多，可以查看手册以获取更多使用方式
+
+原味地址 https://www.lifewire.com/linux-terminal-commands-rock-your-world-2201165[15 Linux Terminal Commands That Will Rock Your World]
+
