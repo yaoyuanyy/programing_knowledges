@@ -1,9 +1,10 @@
 
-[toc]
-
 = 5个给你惊喜的linux命令
+
 Doc Writer <yaoyihao1@gmail.com>
-:toc:
+
+:toc: right
+
 
 .Lightweight Markup
 ****
