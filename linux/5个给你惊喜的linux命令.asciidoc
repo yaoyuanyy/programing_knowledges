@@ -5,12 +5,6 @@ Doc Writer <yaoyihao1@gmail.com>
 
 :toc:
 
-
-.Lightweight Markup
-****
-Writing languages that let you type less and express more.
-****
-
 == 0. 神器 ``ranger ``命令行导航文件系统
 
 
