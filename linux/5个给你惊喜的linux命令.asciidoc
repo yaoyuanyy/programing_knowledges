@@ -3,7 +3,7 @@
 
 Doc Writer <yaoyihao1@gmail.com>
 
-:toc:
+:toc: left
 
 == 0. 神器 ``ranger ``命令行导航文件系统
 
