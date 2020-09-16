@@ -38,14 +38,14 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/ran
 直接在命令行操作目录的感觉很爽.
 
 === 安装
-mac
+
+<1> mac
 
 ----
 $ brew install ranger
 ----
 
-linux
-
+<2> linux
 
 ----
 sudo apt-get install ranger
