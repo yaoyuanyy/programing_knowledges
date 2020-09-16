@@ -1,5 +1,7 @@
 
 = 5个给你惊喜的linux命令
+:tip-caption: 💡
+:icons: font
 :toc: left
 :toc-title: 目录
 
@@ -20,6 +22,11 @@ $ ranger
 https://github.com/ranger/ranger/wiki/Official-user-guide[ranger官方手册]
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/ranger.gif[ranger]
+
+
+
+[TIP]
+直接在命令行操作目录的感觉很爽.
 
 === 安装
 mac
@@ -73,6 +80,12 @@ $ apt-get install ranger
 $ sudo !!
 效果正是你要的`sudo apt-get install ranger`
 ```
+IMPORTANT: ``!!``的作用：将上一条命令输出；sudo !!``的意义在于你不用重复输入尝尝的命令了。
+
+
+
+[CAUTION]
+读者看看``!$``这个命令的作用，和``!!``对比下
 
 == 3 暂停和重新开始命令
 
