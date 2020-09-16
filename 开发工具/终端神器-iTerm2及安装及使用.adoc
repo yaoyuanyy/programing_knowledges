@@ -1,4 +1,4 @@
-= mac下iTerm2安装及使用
+= 终端神器-iTerm2及安装及使用
 :toc: left
 :toc-title: 目录
 :tip-caption: 💡
@@ -62,14 +62,16 @@ export TERM=xterm-color
 本人给大家推荐一个托管在``github上``的关于``iterm2``配色方案的项目。地址是 https://github.com/baskerville/iTerm-2-Color-Themes[iTerm-2-Color-Themes]。这个项目中包含了很多种配色方案，用户可以挑选喜欢的方案通过点击“Load Presets…“按钮导入这些配色方案进行使用。
 
 通过简单的两步就设置起了``iTerm2``的颜色了。是不是看起来比以前爽多了？
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916205756.png[20200916205756]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916205756.png[20200916205756]
 
 参考：
 http://blog.csdn.net/anningzhu/article/details/77774492
 https://www.cnblogs.com/weixuqin/p/7029177.html
 
 现在就可以体验了，顺滑流畅，效果如下图
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916205933.png[20200916205933]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916205933.png[20200916205933]
 
 
 

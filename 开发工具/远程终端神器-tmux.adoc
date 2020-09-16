@@ -55,7 +55,8 @@ Doc writer yaoyihao1@gmail.com
 |===
 
 server、session、window、panel之间的关系如下图
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232302.png[20200916232302]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232302.png[20200916232302]
 
 
 == ``macOS``下安装``tmux``
@@ -176,7 +177,8 @@ bind e set-window-option synchronize-panes
 配置完需要重新加载~/.tmux-conf，见下文：重新加载配置文件
 ----
 实例：
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232342.png[20200916232342]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232342.png[20200916232342]
 
 === 2. 开启鼠标功能：点击选择窗格/窗口，拖动窗格大小，以及拖动鼠标滚屏复制文字
 
@@ -203,7 +205,8 @@ $ set -g mouse on
 - 方法 1：使用 ⌃b z 进入窗格全屏模式，鼠标选择文本的同时按住 option 键 ⌥，然后使用 ⌘c 进行复制；
 
 - 方法 2：开启 iTerm2 「在选择时复制」选项，即可实现选择即复制。如下图：
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232400.png[20200916232400]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232400.png[20200916232400]
 
 == 参考
 https://stackoverflow.com/questions/16398850/create-new-tmux-session-from-inside-a-tmux-session
