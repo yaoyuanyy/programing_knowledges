@@ -1,20 +1,10 @@
 
 = 5个给你惊喜的linux命令
-:tip-caption: 💡
-:note-caption: ℹ️
-:important-caption: ❗
-:caution-caption: 🔥
-:warning-caption: ⚠️
-// :tip-caption: :bulb:
-// :note-caption: :information_source:
-// :important-caption: :heavy_exclamation_mark:
-// :caution-caption: :fire:
-// :warning-caption: :warning:
-:icons: font
 :toc: left
 :toc-title: 目录
 
-Doc writer yaoyihao1@gmail.com
+include::../type.adoc[]
+
 
 == 0. 神器 ``ranger ``命令行导航文件系统
 
