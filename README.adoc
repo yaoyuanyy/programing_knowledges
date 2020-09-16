@@ -5,6 +5,8 @@
 
 - https://github.com/yaoyuanyy/programing_knowledges/blob/master/linux/5%E4%B8%AA%E7%BB%99%E4%BD%A0%E6%83%8A%E5%96%9C%E7%9A%84linux%E5%91%BD%E4%BB%A4.asciidoc[5个给你惊喜的linux命令]
 
+- https://github.com/yaoyuanyy/programing_knowledges/blob/master/linux/netstat%E5%9C%A8mac%E4%B8%8A%E4%B8%8D%E5%A5%BD%E7%94%A8%E4%BA%86%2C%E8%AF%95%E8%AF%95lsof%2C%E9%A3%9E%E8%B5%B7.adoc[netstat在mac上不好用了,试试lsof,飞起]
+
 
 == 开发工具
 
