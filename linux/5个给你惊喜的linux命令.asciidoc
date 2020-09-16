@@ -40,11 +40,13 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/ran
 === 安装
 
 mac 
+
 ----
 $ brew install ranger
 ----
 
 linux
+
 ----
 sudo apt-get install ranger
 ----
