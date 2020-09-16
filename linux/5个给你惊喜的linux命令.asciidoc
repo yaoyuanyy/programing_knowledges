@@ -2,9 +2,19 @@
 = 5个给你惊喜的linux命令
 :toc: left
 :toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+// :icons: font
 
-include::../type.adoc[]
-
+Doc writer yaoyihao1@gmail.com
 
 == 0. 神器 ``ranger ``命令行导航文件系统
 
