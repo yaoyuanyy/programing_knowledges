@@ -1,0 +1,274 @@
+= 远程终端神器-tmux
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+== 前言
+
+日常的编程开发过程中，你是否遇到了如下的烦恼
+
+- 终端一个界面分成多个窗口
+- 公司的环境多样：``dev环境``，``test环境``，``preview环境``，每次调试各环境上的问题，都需要``ssh xxx``，还要输入各环境的密码，烦人的密码怎让人记得住，问题还没调呢，找密码花费一番周折
+- 上线的服务部署了3台以上机器，每次都要通过麻烦的跳板机，还有手机验证，还要一台一台``ssh``连接
+
+如果你有以上至少一种苦恼，那么``tmux``绝对给你惊艳，大大提高你工作的效率
+
+[NOTE]
+如果想一劳永逸，你需要一台``24小时``运行的机器，只要是不关机就是云机器
+ 
+== ``tmux``介绍
+全称``Terminal Multiplexer``，简单的说：它是一个多终端进程管理器，主要用到的功能是终端界面分屏显示，后台运行终端进程。
+
+根据``tmux``的定义，在开启了``tmux``服务器后，会首先创建一个会话，而这个会话则会首先创建一个窗口，其中仅包含一个面板；也就是说，这里看到的所谓终端控制台应该称作``tmux``的一个面板，虽然其使用方法与终端控制台完全相同。
+
+``tmux``结合``iTerm2``产生更大的功效，iTerm2安装和使用参见： https://github.com/yaoyuanyy/programing_knowledges/blob/master/%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7/mac%E4%B8%8BiTerm2%E5%AE%89%E8%A3%85%E5%8F%8A%E4%BD%BF%E7%94%A8.adoc[mac下iTerm2安装和使用]
+
+``tmux``主要包括以下单元模块
+
+.结构
+|===
+|单元模块 |描述
+
+|server 服务器
+|输入tmux命令时就开启了一个服务器
+
+|session 会话
+|一个服务器可以包含多个会话
+
+|window 窗口
+|一个会话可以包含多个窗口
+
+|panel 面板
+|一个窗口可以包含多个面板
+|===
+
+server、session、window、panel之间的关系如下图
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232302.png[20200916232302]
+
+
+== ``macOS``下安装``tmux``
+``macOS``上使用``Homebrew``安装即可：
+----
+$ brew install tmux
+----
+
+== ``linux``下安装``tmux``
+----
+$ yum install tmux 此安装的可能不是tmux最新版本
+$ tmux ls 可能报下面错
+tmux failed to connect to server
+$ tmux 后退出再tmux ls就可以了
+----
+[WARNING]
+通过yum安装的tmux不是最新版，最新版安装见片尾linux安装部分
+
+
+== ``tmux``常用命令
+  
+ tmux ls = 列出所有 tmux session会话 -->常用
+ tmux new -s foo = 新建名称为 foo 的session会话 -->常用
+ tmux a = 恢复至上一次的session会话 -->常用
+ tmux a -t foo = 恢复名称为 foo 的会session话，会话默认名称为数字 -->常用
+ tmux kill-session -t foo = 删除名称为 foo 的session会话 -->常用
+ tmux kill-server = 删除所有的session会话 -->常用
+ tmux list-panes -a 列出当前session的所有窗格 -->常用
+
+创建session回话有两种方式
+
+- 方式一
+
+----
+To create a new session, The quickest way is:
+ctrl-b :new -s <name>
+
+Then ctrl-b s to interactively select and attach to the session.
+----
+
+- 方式二
+
+----
+If we try to create a new session while attached it will result in a nesting error, Error info: sessions should be nested with care, unset $TMUX to force
+
+$ tmux new -s bar
+
+To solve this we create a new detached session
+$ tmux new -s bar -d
+----
+
+== 快捷键
+NOTE: 一般情况下 tmux 中所有的快捷键都需要和前缀快捷键 ⌃b 来组合使用
+
+=== 会话``session/server操作``
+
+如果运行了多次``tmux``命令则会开启多个``tmux session``会话。在``tmux``会话中，不要忘记前缀快捷键``⌃b`` 
+
+----
+$ 重命名当前会话 -->常用
+d 脱离当前会话；这样可以暂时返回Shell界面，输入tmux a能够重新进入之前的会话 -->常用
+D 选择要脱离的会话；在同时开启了多个会话时使用 -->常用
+s 选择并切换会话；在同时开启了多个会话时使用 -->常用
+? 列出所有快捷键；按q返回
+: 进入命令行模式；此时可以输入支持的命令，例如kill-server可以关闭服务器
+Ctrl+z  挂起当前会话
+r 强制重绘未脱离的会话
+[ 进入复制模式；此时的操作与vi/emacs相同，按q/Esc退出 不好用，不建议
+~ 列出提示信息缓存；其中包含了之前tmux返回的各种提示信息
+----
+
+=== 窗口``window``操作
+
+``tmux``除了窗格以外，还有窗口``window`` 的概念。依次使用以下快捷键来熟悉``tmux``的窗口操作：
+
+----
+c 新建窗口，此时当前窗口会切换至新窗口，不影响原有窗口的状态 -->常用
+, 重命名窗口，可以使用中文，重命名后能在 tmux 状态栏更快速的识别窗口 -->常用
+<n> <n>为键盘数字，切换到第 n 个 Window. 例：0 切换至 0 号窗口，使用其他数字切换至对应窗口 -->常用
+& 关闭当前窗口 -->常用
+p 切换至上一窗口
+n 切换至下一窗口
+w 窗口列表选择，注意 macOS 下使用 ⌃p 和 ⌃n 进行上下选择
+f 根据窗口名搜索选择窗口，可模糊匹配
+----
+
+=== 窗格``panel``操作
+----
+% 左右平分出两个窗格 -->常用
+" 上下平分出两个窗格 -->常用
+z 最大化当前窗格，再次执行可恢复原来大小 -->常用
+x 关闭当前窗格 -->常用
+space 切换窗格布局，tmux 内置了五种窗格布局，也可以通过 ⌥1 至 ⌥5来切换 -->常用
+{ 当前窗格前移
+} 当前窗格后移
+; 选择上次使用的窗格
+o 选择下一个窗格，也可以使用上下左右方向键来选择
+q 显示所有窗格的序号，在序号出现期间按下对应的数字，即可跳转至对应的窗格
+----
+
+== 必备配置
+=== 1. 多窗格同步执行相同命令功能(Type your command to be executed in all panes in same window)
+
+- 方法1 当前window有效
+----
+To turn on: Ctrl-b then :setw synchronize-panes
+To turn off: Ctrl-b then :setw synchronize-panes off
+----
+
+- 方法2 全局有效
+----
+Actually, I bind a couple of keyboard shortcuts in ~/.tmux-conf to switch on/off panes synchronization:
+bind e setw synchronize-panes on
+bind E setw synchronize-panes off
+方法3 全局有效
+Just to note, you don't need to set 2 keys, instead you can use one key to toggle synchronization option: 
+bind e set-window-option synchronize-panes
+配置完需要重新加载~/.tmux-conf，见下文：重新加载配置文件
+----
+实例：
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232342.png[20200916232342]
+
+=== 2. 开启鼠标功能：点击选择窗格/窗口，拖动窗格大小，以及拖动鼠标滚屏复制文字
+
+``tmux``默认配置中最糟糕的体验就是滚屏查看和文本复制（大家可以先试试看）。你需要先使用 ⌃b [ 快捷键进入 copy 模式，然后使用翻页、字符定位来选择需要的字符，效率远没有鼠标选择来的快。
+因此``tmux``提供了一些个性化配置项来优化这些配置，在``shell``中编辑``~/.tmux-conf``配置文件。在文件中增加以下内容：
+开启了所有鼠标功能：点击选择窗格/窗口，拖动窗格大小，以及拖动鼠标滚屏复制文字。
+----
+$ set -g mouse on
+----
+
+2.1之前的版本(发布于2015.10.18) 需要设置``mode-mouse``,``mouse-select-pane``, ``mouse-resize-pane``, ``ouse-select-window``等4 个选项来开启所有鼠标功能，现在只需要设置 mouse 选项了。 使用``tmux -V``可以查看当前安装的``tmux``版本，版本更新日志见``Tmux Changelog``
+保存后重新加载配置文件。见下文：重新加载配置文件)
+
+=== 3. 重新加载配置文件
+配置文件修改完成后，重新加载配置文件，三种方式：
+
+- $ tmux kill-server 重启所有 tmux 进程
+- $ tmux source-file ~/.tmux.conf
+- $ tmux 会话中使用 ⌃b进入控制台模式，输入 source-file ~/.tmux.conf
+
+=== 4. 鼠标复制
+``tmux``下开启鼠标滚屏后，复制文本有两种方式：
+
+- 方法 1：使用 ⌃b z 进入窗格全屏模式，鼠标选择文本的同时按住 option 键 ⌥，然后使用 ⌘c 进行复制；
+
+- 方法 2：开启 iTerm2 「在选择时复制」选项，即可实现选择即复制。如下图：
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916232400.png[20200916232400]
+
+== 参考
+https://stackoverflow.com/questions/16398850/create-new-tmux-session-from-inside-a-tmux-session
+https://segmentfault.com/a/1190000003001555
+https://www.cnblogs.com/kaiye/p/6275207.html
+http://mindonmind.github.io/notes/linux/tmux.html
+https://blog.csdn.net/trochiluses/article/details/9773103
+https://harttle.land/2015/11/06/tmux-startup.html
+https://segmentfault.com/a/1190000008188987
+扩展
+http://louiszhai.github.io/2017/09/30/tmux/=Tmux-Resurrect
+
+
+到这里，``tmux``你已经拥有了，开始你顺滑之旅吧。技术是没有止境的，在mac系统上，拥有着更简便的操作方式，那就是afred这款神器，他可以结合其插件实现一键连接远程多机器，顺滑的令人陶醉。
+具体参见： https://yaoyuanyy.github.io/2019/05/13/%E5%BC%80%E5%8F%91%E6%95%88%E7%8E%87%E7%A5%9E%E6%8F%90%E5%8D%87%E4%B9%8Balfred%E9%9B%86%E6%88%90ssh+iterm/[开发效率神提升之alfred集成ssh+iterm+tmux]
+
+
+"其实，技术就是这样的，一步一步的发展，在问题的驱动下，越来越专注，越来越方便，越来越智能。我们要做的只有不断的尝试，不断的前行，不断的应用"
+-- 自语
+
+== linux下安装tmux 
+=== 方式一 yum安装
+$ yum install tmux 此安装的可能不是tmux最新版本
+$ tmux ls 可能报下面错
+tmux failed to connect to server
+$ tmux 后退出再tmux ls就可以了
+
+=== 方式二 源码安装最新版
+
+----
+step1
+INSTALL DEPS
+$ yum install gcc kernel-devel make ncurses-devel
+
+step2
+DOWNLOAD SOURCES FOR LIBEVENT AND MAKE AND INSTALL
+$ curl -OL https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
+$ tar -xvzf libevent-2.0.22-stable.tar.gz
+$ cd libevent-2.0.22-stable
+$ ./configure --prefix=/usr/local
+$ make
+$ sudo make install
+$ cd ..
+
+step3
+DOWNLOAD SOURCES FOR TMUX AND MAKE AND INSTALL
+$ curl -OL https://github.com/tmux/tmux/releases/download/2.3/tmux-2.3.tar.gz
+$ tar -xvzf tmux-2.3.tar.gz
+$ cd tmux-2.3
+$ LDFLAGS="-L/usr/local/lib -Wl,-rpath=/usr/local/lib" ./configure --prefix=/usr/local
+$ make
+$ sudo make install
+$ cd ..
+
+step4
+PKILL TMUX
+$ sudo killall -9 tmux
+$ close your terminal window (flushes cached tmux executable)
+$ open new shell and check tmux version
+$ tmux -V
+----
+== 参考：
+https://gist.github.com/philipsd6/9576d313d577b57dd7c351ac801317f2
+http://witkowskibartosz.com/blog/update-your-tmux-to-latest-version.html=.W2bPQNgzaqD
+
+结合zsh体验更流程的感觉
+zsh
+https://segmentfault.com/a/1190000014992947
