@@ -1,0 +1,103 @@
+= mac下iTerm2安装及使用
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+== 背景
+Mac OS自带的终端，虽然可以用，但是太单调和乏味，用起来虽然有些不太方便，终端利器iTerm2，非常强大也非常的好用，漂亮的视觉冲击，方便便捷的操作方式，支持zsh等插件实现更强大的功能。
+
+== 安装
+
+方式一 ``brew安装``
+
+直接使用Homebrew进行安装
+----
+$ brew cask install iterm2
+----
+
+方式二 源码安装
+
+https://iterm2.com/[官网下载]安装
+
+两种方式都很简便
+
+== 配色 
+当我们打开``terminal``或者``iTerm2``终端时，那些默认的黑白色让人感觉索然无味，在终端下使用``vim``也是一番死气沉沉的样子。这严重影响了我们使用终端进行开发的兴趣。本文则详细讲解如何启用其Color模式，并搜集了一些好用的配色方案供大家选择。
+
+=== 第一步：编辑``.pash_profile``文件
+使用你最喜爱的编辑器打开``.pash_profile``文件。``~/.bash_profile``是``bash shell``中当前登录用户的配置文件。``Bash是“终端”中默认的shell``。
+你可以使用下面的命令在terminal打开它：
+
+----
+$ vim ~/.bash_profile
+----
+然后将下面的代码拷贝到此文件中。
+
+----
+=enables colorin the terminal bash shell export  
+export CLICOLOR=1  
+=sets up thecolor scheme for list export  
+export LSCOLORS=gxfxcxdxbxegedabagacad  
+=sets up theprompt color (currently a green similar to linux terminal)  
+export PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;36m\]\w\[\033[00m\]\$ '  
+=enables colorfor iTerm  
+export TERM=xterm-color  
+----
+
+=== 第二步：为``iTerm2``设置喜爱的配色方案。
+
+打开``iTerm2``的使用偏好设置，选择``profiles``，然后选择``Colors``标签，然后进行颜色配置。用户也可以点击``Load Presets…``按钮加载一些经典的配色方案。
+本人给大家推荐一个托管在``github上``的关于``iterm2``配色方案的项目。地址是 https://github.com/baskerville/iTerm-2-Color-Themes[iTerm-2-Color-Themes]。这个项目中包含了很多种配色方案，用户可以挑选喜欢的方案通过点击“Load Presets…“按钮导入这些配色方案进行使用。
+
+通过简单的两步就设置起了``iTerm2``的颜色了。是不是看起来比以前爽多了？
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916205756.png[20200916205756]
+
+参考：
+http://blog.csdn.net/anningzhu/article/details/77774492
+https://www.cnblogs.com/weixuqin/p/7029177.html
+
+现在就可以体验了，顺滑流畅，效果如下图
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916205933.png[20200916205933]
+
+
+
+== ``iTerm2``常用快捷键
+----
+⌘ + t ： 新建tab标签页
+⌘ + 数字 ： 各tab标签切换
+⌘ + f ： 查找 ，所查找的内容会被自动复制 ,输入查找的部分字符，找到匹配的值按tab，即可复制
+⌘ + d ： 横着分屏(同一个窗口中分割出多个窗格) 
+⌘ + shift + d ： 竖着分屏(同一个窗口中分割出多个窗格)
+⌘ + ⌥ + 方向键 ： 窗格间切换
+⌘ + r = clear ： 换到新一屏，而不是 类似clear ，会创建一个空屏
+ctrl + u ：清空当前行，无论光标在什么位置
+() + ⌘ + ; ： [() 输入的命令开头字符],会自动列出输入过的命令
+⌘ + shift + h ： 会列出剪切板历史
+⌘← / ⌘→ : 到一行命令最左边/最右边 
+⌘ + enter : 全屏
+----
+
+
+== 扩展
+
+在``iTerm2``的协助下，你已经可以方便的提高工作效率了，但是没有最好，还有更顺滑流程提高效率的工具。它就是``tmux``。日常的编程开发过程中，你是否遇到了如下的烦恼
+
+
+- 终端一个界面分成多个窗口
+- 公司的环境多样：``dev环境``，``test环境``，``preview环境``，每次调试各环境上的问题，都需要``ssh xxx``，还要输入各环境的密码，烦人的密码怎让人记得住，问题还没调呢，找密码花费一番周折
+- 上线的服务部署了3台以上机器，每次都要通过麻烦的跳板机，还有手机验证，还要一台一台ssh连接
+
+
+``tmux``绝对可以成为神器，具体参见 https://yaoyuanyy.github.io/2019/07/12/mac-linux%E5%AE%89%E8%A3%85%E5%8F%8A%E4%BD%BF%E7%94%A8%E6%9C%80%E6%96%B0%E7%89%88tmux/[linux/mac安装及使用最新版tmux]
