@@ -59,6 +59,7 @@ $ ranger --copy-config=all
 
 === 启动
 
+[source,java,subs="verbatim"]
 ----
 $ ranger // <1>
 ----
