@@ -59,9 +59,9 @@ $ ranger --copy-config=all
 
 === 启动
 
-[source,java,subs="verbatim"]
+[subs="verbatim"]
 ----
-$ ranger // <1>
+$ ranger <1>
 ----
 <1> 此命令开始运行
 
