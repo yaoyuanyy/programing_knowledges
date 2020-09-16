@@ -1,0 +1,159 @@
+= spring boot加载.class方式草集
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+``spring``这个庞大的家族给了我们很大便利的同时，也给了我们很多的眼界。使得我们可以模仿它，有个能模仿它的框架，有的能模仿它的某个知识点。现在，我们来对``spring``, ``spring boot``, ``spring cloud``中的涉及加载``.class``文件方式进行一次摸底，形成一个草集。
+
+当前，在``spring``框架中，主要有以下种类的文件``.class``文件，``spring.factories``文件，``.properties/.yml``文件，``.xml``文件等等。前三种距离实际开发工作更近，所有我们详说前三种，下面我们就看看这三种``resource资源文件`` ``spring``是如何加载解析的
+
+== 加载``.class``文件
+
+虽然都是加载``.class``文件，也都是从``classpath*``下去寻找并加载，但是在入参上提供了不同层次的传入，方式一提供的是注解属性集合和指定类``class``，方式二是``spring cloud openfeign``自己的层级参入。这两种方式都可以为我们直接使用。当然，最终用的还是公共(通用)部分，即：``ClassPathScanningCandidateComponentProvider.findCandidateComponents(String)``
+
+=== 方式一 解析注解属性值确定``package``目录从而实现加载``classpath*``下指定目录``*.class``文件
+
+----
+ComponentScanAnnotationParser class
+public Set<BeanDefinitionHolder> parse(AnnotationAttributes componentScan, final String declaringClass ) {
+    ClassPathBeanDefinitionScanner scanner = new ClassPathBeanDefinitionScanner(this.registry,
+            componentScan.getBoolean("useDefaultFilters"), this.environment, this.resourceLoader);
+
+    scanner.setBeanNameGenerator(this.beanNameGenerator);
+    scanner.setScopedProxyMode(scopedProxyMode);
+    scanner.setScopeMetadataResolver(BeanUtils.instantiateClass(resolverClass));
+    scanner.setResourcePattern(componentScan.getString("resourcePattern"));
+    scanner.addIncludeFilter(typeFilter);
+    scanner.addExcludeFilter(typeFilter);
+    scanner.getBeanDefinitionDefaults().setLazyInit(true);
+    
+    Set<String> basePackages = new LinkedHashSet<>();
+    for (Class<?> clazz : componentScan.getClassArray("basePackageClasses")) {
+        basePackages.add(ClassUtils.getPackageName(clazz));
+    }
+
+    return scanner.doScan(StringUtils.toStringArray(basePackages));
+}
+
+protected Set<BeanDefinitionHolder> doScan(String... basePackages) {
+    Set<BeanDefinitionHolder> beanDefinitions = new LinkedHashSet<>();
+    for (String basePackage : basePackages) {
+        // 调用下面的公共部分的方法，即ClassPathScanningCandidateComponentProvider.findCandidateComponents(String)
+        Set<BeanDefinition> candidates = findCandidateComponents(basePackage);
+        for (BeanDefinition candidate : candidates) {
+            String beanName = this.beanNameGenerator.generateBeanName(candidate, this.registry);
+            if (checkCandidate(beanName, candidate)) {
+                BeanDefinitionHolder definitionHolder = new BeanDefinitionHolder(candidate, beanName);
+                beanDefinitions.add(definitionHolder);
+                registerBeanDefinition(definitionHolder, this.registry);
+            }
+        }
+    }
+    return beanDefinitions;
+}
+----
+
+=== 方式二 加载指定``package``目录下的``.class``文件
+``spring cloud openfeign``作为RPC调用组件，他没有直接使用``spring``通用的逻辑，而是自己在加载``feign组件的.class``时，它自己实现了一套加载逻辑。
+
+----
+FeignClientsRegistrar class
+public void registerFeignClients(AnnotationMetadata metadata, BeanDefinitionRegistry registry) {
+    ClassPathScanningCandidateComponentProvider scanner = getScanner();
+    scanner.setResourceLoader(this.resourceLoader);
+    scanner.addIncludeFilter(new AnnotationTypeFilter(FeignClient.class));
+
+    Set<String> basePackages = getBasePackages(metadata);
+    for (String basePackage : basePackages) {
+        // 调用下面的公共部分的方法，即ClassPathScanningCandidateComponentProvider.findCandidateComponents(String)
+        Set<BeanDefinition> candidateComponents = scanner.findCandidateComponents(basePackage);
+        for (BeanDefinition candidateComponent : candidateComponents) {
+            if (candidateComponent instanceof AnnotatedBeanDefinition) {
+                // verify annotated class is an interface
+                AnnotatedBeanDefinition beanDefinition = (AnnotatedBeanDefinition) candidateComponent;
+                AnnotationMetadata annotationMetadata = beanDefinition.getMetadata();
+                
+                Map<String, Object> attributes = annotationMetadata
+                        .getAnnotationAttributes(FeignClient.class.getCanonicalName());
+             
+                registerFeignClient(registry, annotationMetadata, attributes);
+            }
+        }
+    }
+}
+----
+通过创建``ClassPathScanningCandidateComponentProvider``对象，并给他赋值类加载器、目标类型等。同时提供package目录就可以完成加载其下的``.class``文件，然后生成BeanDefinition放入spring beanFactory容器。这可以说就是一个工具类
+
+公共部分(即实现原理内部)
+----
+ClassPathScanningCandidateComponentProvider class
+public Set<BeanDefinition> findCandidateComponents(String basePackage) {
+    return scanCandidateComponents(basePackage);
+}
+
+private Set<BeanDefinition> scanCandidateComponents(String basePackage) {
+    Set<BeanDefinition> candidates = new LinkedHashSet<>();
+    
+    // 如 classpath*:com/skyler/**/*.class
+    String packageSearchPath = ResourcePatternResolver.CLASSPATH_ALL_URL_PREFIX +
+            resolveBasePackage(basePackage) + '/' + this.resourcePattern;
+    Resource[] resources = getResourcePatternResolver().getResources(packageSearchPath);
+    for (Resource resource : resources) {
+        MetadataReader metadataReader = getMetadataReaderFactory().getMetadataReader(resource);
+        if (isCandidateComponent(metadataReader)) {
+            ScannedGenericBeanDefinition sbd = new ScannedGenericBeanDefinition(metadataReader);
+            candidates.add(sbd);
+        }
+     }
+    return candidates;
+}
+----
+如方法所示，加载的都是``classpath*``下指定目录的``.class``们
+
+
+== 加载``.factories``文件
+
+=== 项目下所有``jar包``中的``META-INF/spring.factories``加载指定的``class``类型对象集合
+----
+List<EnvironmentPostProcessor> loadPostProcessors() {
+    // 核心方法
+    return SpringFactoriesLoader.loadFactories(EnvironmentPostProcessor.class,
+            getClass().getClassLoader());
+}
+
+// 应用示例
+private void onApplicationEnvironmentPreparedEvent(ApplicationEnvironmentPreparedEvent event) {
+    List<EnvironmentPostProcessor> postProcessors = loadPostProcessors();
+    AnnotationAwareOrderComparator.sort(postProcessors);
+    for (EnvironmentPostProcessor postProcessor : postProcessors) {
+        postProcessor.postProcessEnvironment(event.getEnvironment(), event.getSpringApplication());
+    }
+}
+
+----
+在项目下所有``jar包``中的``META-INF/spring.factories``加载指定的``class``类型对象集合。如上方法，加载``EnvironmentPostProcessor``类型的对象集合
+
+== 加载``.properties/.yml``文件
+
+详见：``ConfigFileApplicationListener class``
+
+== 扩展
+``AnnotatedBeanDefinitionReader与ClassPathBeanDefinitionScanner``各自功能及区别
+----
+public AnnotationConfigServletWebServerApplicationContext() {
+    this.reader = new AnnotatedBeanDefinitionReader(this);
+    this.scanner = new ClassPathBeanDefinitionScanner(this);
+}
+----
