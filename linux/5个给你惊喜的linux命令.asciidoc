@@ -12,7 +12,7 @@
 // :important-caption: :heavy_exclamation_mark:	
 // :caution-caption: :fire:
 // :warning-caption: :warning:
-// :icons: font
+:icons: font
 
 Doc writer yaoyihao1@gmail.com
 
