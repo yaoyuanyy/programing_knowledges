@@ -81,3 +81,5 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 一句话总结：把之前``revert``的那条``commit``再``revert``一下
 
+gp: https://juejin.im/post/6856039543628693517[代码被revert,你pull了master,代码没了,咋找回来]
+
