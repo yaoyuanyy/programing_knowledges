@@ -1,0 +1,83 @@
+= 代码被revert,你pull了master,代码没了,咋回来?
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+
+== 问题场景
+实际工作中，在上线时，你的新功能代码都是在``gitlab``上提交``merge to master``的请求，拥有``merge权限的领导``通过后，你的代码才合到``master``。好，QA开始上线了你的代码，这时 啪，啪，报警了，代码有问题。领导``revert了你的代码``以保证master分支的正确。这时，你的分支``pull了master``后，你发现你分支上的``新功能代码都没有了``！！咋找回来
+
+
+本文从实战角度来解决这个问题
+
+== 条件
+> 假设你已经有了一个git项目: ``test-git``，并且有两个分支: ``master，test``
+
+== 实战
+在``test分支``，你创建了一个文件``welcome``，文本:``hi git``。并``git commit -m '测试git revert'提交``
+
+当前，master，test的内容如下
+----
+~/tt/test-git>>master $ ll
+drwxr-xr-x  3 tt  staff    96B  5  8 20:54 test
+-rw-r--r--  1 tt  staff    16B  8  1 19:55 test3.log
+----
+----
+~/tt/test-git>>test $ ll
+drwxr-xr-x  3 tt  staff    96B  5  8 20:54 test
+-rw-r--r--  1 tt  staff    16B  8  1 19:55 test3.log
+-rw-r--r--  1 tt  staff     7B  8  1 20:19 welcome
+
+~/tt/test-git>>test $ cat welcome
+hi git
+----
+现在，向``master``提交``merge to master``请求，如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916142423.png[20200916142423]
+
+领导merge后开始上线，假设线上出现问题，领导revert了这次提交的代码。如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916142649.png[20200916142649]
+
+接着你要查看问题，所以你会本地操作，回到你的代码分支，执行``git merge origin/master``
+----
+~/tt/test-git>>test $ git merge origin/master
+Updating 670adc2..d3961f7
+Fast-forward
+ welcome | 1 -
+ 1 file changed, 1 deletion(-)
+ delete mode 100644 welcome
+~/tt/test-git>>test $ ll
+total 8
+drwxr-xr-x  3 tt  staff    96B  5  8 20:54 test
+-rw-r--r--  1 tt  staff    16B  8  1 19:55 test3.log
+----
+此时，你发现你提交的代码没有了，咋找回来呢，下面开始找回操作
+
+1. ``git log``找到领导``revert``你代码的那个``commit id``，这里``commit id``是``50a06845da879ab76e6fdd55dce923826742dcb2``。如下图三个commit的说明
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916142940.png[20200916142940]
+
+2. ``git revert --no-commit 50a06845da879ab76e6fdd55dce923826742dcb2``
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916143019.png[20200916143019]
+
+然后就没有然后了，你的代码已经回来了。简单吧
+
+== 总结
+找到领导``revert``你代码的``commit id``，然后``git revert --no-commit commit id``
+
+一句话总结：把之前``revert``的那条``commit``再``revert``一下
+
