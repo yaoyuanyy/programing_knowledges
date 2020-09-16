@@ -95,11 +95,10 @@ $ sudo !!
 nohup wget http"//xxxx &
 ----
 
-
-
 详情参考 https://zhuanlan.zhihu.com/p/59297350[&与nohup的用法]
 
-== 5 使用``nohup``运行命令，当从``ssh``会话注销后，命令依旧执行
+
+== 5 ``at``指定时间执行命令
 
 如果您已连接到``ssh``服务器，并且希望该命令在``ssh``会话注销后仍保持运行，则``nohup``命令会很好.
 
