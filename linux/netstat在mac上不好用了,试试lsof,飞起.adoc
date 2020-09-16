@@ -40,7 +40,7 @@ netstat [-AabdgiLlmnqrRsSvWx] [-c queue] [-f address_family] [-I interface] [-p 
 ``netstat``在``macOS下与linux下工作方式是不一样的``，所以在``macOS``下使用``flags``和语法会导致不期望的结果
 
 [TIP]
-如果这些语法你不太理解，读一读https://www.lifewire.com/how-to-read-command-syntax-2618082[怎样阅读命令语法]
+如果这些语法你不太理解，读一读 https://www.lifewire.com/how-to-read-command-syntax-2618082[怎样阅读命令语法]
 
 === 常用的``flags``
 这里列举了常用的``flags``:
