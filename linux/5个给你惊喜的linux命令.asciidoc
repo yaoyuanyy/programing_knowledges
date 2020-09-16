@@ -59,7 +59,7 @@ $ ranger --copy-config=all
 
 === 启动
 
-[subs="verbatim"]
+[source, subs="verbatim"]
 ----
 $ ranger <1>
 ----
