@@ -56,10 +56,11 @@ sudo apt-get install ranger
 ----
 $ ranger --copy-config=all
 ----
+
 === 启动
 
 ----
-$ ranger <1>
+$ ranger // <1>
 ----
 <1> 此命令开始运行
 
