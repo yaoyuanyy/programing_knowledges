@@ -1,7 +1,7 @@
 
 = 5个给你惊喜的linux命令
 :toc: left
-// :toc-title: linux
+:toc-title: 目录
 
 Doc writer yaoyihao1@gmail.com
 
@@ -29,6 +29,7 @@ $ brew install ranger
 ----
 
 linux
+
 
 ----
 sudo apt-get install ranger
