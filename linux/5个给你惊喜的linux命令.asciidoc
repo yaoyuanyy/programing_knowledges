@@ -9,7 +9,7 @@
 :warning-caption: ⚠️
 // :tip-caption: :bulb:
 // :note-caption: :information_source:
-// :important-caption: :heavy_exclamation_mark:
+// :important-caption: :heavy_exclamation_mark:	
 // :caution-caption: :fire:
 // :warning-caption: :warning:
 // :icons: font
@@ -39,14 +39,12 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/ran
 
 === 安装
 
-<1> mac
-
+mac 
 ----
 $ brew install ranger
 ----
 
-<2> linux
-
+linux
 ----
 sudo apt-get install ranger
 ----
@@ -59,8 +57,9 @@ $ ranger --copy-config=all
 === 启动
 
 ----
-$ ranger
+$ ranger <1>
 ----
+<1> 此命令开始运行
 
 == 1. 非常有用的命令行快捷键
 
