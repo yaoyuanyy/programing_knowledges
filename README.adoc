@@ -1,6 +1,10 @@
 
 = 编程知识草集站
 
+== java
+
+- https://github.com/yaoyuanyy/programing_knowledges/blob/master/java/%E6%9F%A5%E7%9C%8B%E8%BF%9C%E7%A8%8Bjava%E6%9C%8D%E5%8A%A1%E7%9A%84system%20properties%E7%9A%84%E6%89%80%E6%9C%89%E6%96%B9%E5%BC%8F%E6%96%B9%E6%B3%95.adoc[查看远程java服务的system properties的所有方式方法]
+
 == linux
 
 - https://github.com/yaoyuanyy/programing_knowledges/blob/master/linux/5%E4%B8%AA%E7%BB%99%E4%BD%A0%E6%83%8A%E5%96%9C%E7%9A%84linux%E5%91%BD%E4%BB%A4.asciidoc[5个给你惊喜的linux命令]
