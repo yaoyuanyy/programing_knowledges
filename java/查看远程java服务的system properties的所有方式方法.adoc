@@ -1,0 +1,132 @@
+= 查看远程java服务的system properties的所有方式方法
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+
+== 背景
+今天接到一个需求，pdf文件加水印，经过一番调研实现了，但有个细节：需要将加水印的字节流持久化到临时文件中，然后再读取这个文件上传到云上。大家都知道，线上的机器磁盘路径都是需要权限才能创建文件的。所以，对我来说，需要确认线上的java.io.tmpdir指定的路径是否需要权限访问，我需要把java.io.tmpdir的路径告诉SRE同事，从而确认是否有权限。但问题是我需要知道java.io.tmpdir的值。那么，问题来了，我怎么知道呢
+
+[NOTE]
+当然，不能在项目中现加代码重启服务，那样成本太高了，也不优雅
+
+这篇文章会给出问题的答案，并且会展示很多的方式方法，以便实际工作中帮助你选择适合你的那个。本篇通过以java.io.tmpdir这个java系统变量(system properties)为例，揭示查看java系统变量(system properties)的所有方式方法
+
+> 本文力求专注和精简，希望你有所收获和想法
+
+== 正文
+
+=== method 1 - spring boot actuator/env端点
+因为我们的技术栈是spring boot2，所以我第一时间想到的是通过/actuatoc/env查看。启动服务后浏览器访问ip:port/actuator/env。如我的服务http://localhost:2372/actuator/env
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201021142056.png[20201021142056]
+
+[NOTE]
+很多大厂里，为了安全性，运维人员会禁掉或加权限actuator的端点访问。这样，我们就无法使用这种方式了。
+
+=== method 2 - `jinfo -sysprops`
+大家都知道，java本身暴露给我们几大命令，是的，通过命令也可以查看java系统参数，使用jinfo命令。jinfo -sysprops pid。
+如下
+----
+[root@test code]= jinfo -sysprops 1
+Attaching to process ID 1, please wait...
+Debugger attached successfully.
+Server compiler detected.
+JVM version is 25.181-b13
+java.vendor = Oracle Corporation
+sun.java.launcher = SUN_STANDARD
+catalina.base = /tmp/tomcat.7396898948000000000.8080
+java.io.tmpdir = /tmp
+  ...
+----
+
+[NOTE]
+同样，这种方式也面临同样的问题：很多大厂里，为了安全性，运维人员会禁掉或加权限actuator的端点访问。这样，我们就无法使用这种方式了。
+
+操作时会报下面的错误
+----
+[01@online 20201021]$ jinfo  13900                                                             
+Attaching to process ID 13900, please wait...
+Error attaching to process: sun.jvm.hotspot.debugger.DebuggerException: cannot open binary file
+sun.jvm.hotspot.debugger.DebuggerException: sun.jvm.hotspot.debugger.DebuggerException: cannot open binary file
+        at sun.jvm.hotspot.debugger.linux.LinuxDebuggerLocal$LinuxDebuggerLocalWorkerThread.execute(LinuxDebuggerLocal.java:163)
+----
+
+
+=== method 3 - `jvisualvm or VisualVM`
+我们知道，java也暴露给我们一些可视化监控的工具，我们可以远程连接，从而查看java系统属性。如jvisualvm，VisualVM，jconsole，jmc。但有个前提，java -jar启动命令里需要配置jmx参数
+----
+-Dcom.sun.management.jmxremote 
+-Dcom.sun.management.jmxremote.port=8081 
+-Dcom.sun.management.jmxremote.authenticate=false 
+-Dcom.sun.management.jmxremote.ssl=false
+----
+我们看下jvisualvm的效果
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201021150032.png[20201021150032]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201021150401.png[20201021150401]
+
+如上图所示，这种方式也可以方便的看到java系统参数。但是需要暴露jmx配置，所以，假如java -jar没有暴露jmx参数，那么这种方式就不能使用了。
+
+=== method 4 - `java -XshowSettings:category`
+这种方式，也是通过java命令，是java的-X命令，-X命令是java非标准的命令，但也很稳定。更关键的是这种方式是没有局限的。运维一般不会加权限
+
+`-XshowSettings:category`
+Possible category arguments for this option include the following:
+----
+all
+Shows all categories of settings. This is the default value.
+
+locale
+Shows settings related to locale.
+
+properties
+Shows settings related to system properties.
+
+vm
+Shows the settings of the JVM.
+----
+
+效果如下：
+
+----
+[root@test code]= java -XshowSettings:all -version
+VM settings:
+    Max. Heap Size (Estimated): 10.93G
+    Ergonomics Machine Class: server
+    Using VM: Java HotSpot(TM) 64-Bit Server VM
+
+Property settings:
+    awt.toolkit = sun.awt.X11.XToolkit
+    file.encoding = UTF-8
+    file.encoding.pkg = sun.io
+    file.separator = /
+    java.io.tmpdir = /tmp
+    ...
+----
+
+
+== it`s time to summary
+本文介绍了四种查看java系统参数的方式
+
+1. spring boot actuator/env端点
+2. jinfo -sysprops
+3. jvisualvm or VisualVM
+4. java -XshowSettings:all
+
+
+第一、二种方式运维侧会禁掉或加权限，导致不能使用，或使用复杂；第三种方式需要java -jar配置jmx信息；第四种方式目前没发现约束性。这四种方式都是很方便的
+
+还有其他的方式，如arthas、编写代码重启服务等。一切以方便的解决问题为主
