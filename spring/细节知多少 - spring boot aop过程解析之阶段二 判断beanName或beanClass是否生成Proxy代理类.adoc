@@ -1,0 +1,580 @@
+= 细节知多少 - spring boot aop过程解析之阶段二 判断beanName或beanClass是否生成Proxy代理类
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+
+此篇是细节知多少-spring boot aop过程解析系列的第二篇，即第二阶段
+
+我们把spring boot的aop实现分为三个阶段
+- AnnotationAwareAspectJAutoProxyCreator加载(初始化和实例化)阶段
+- AnnotationAwareAspectJAutoProxyCreator使用post-process基于@Aspect验证beanName或beanClass是否可以生成Proxy代理类阶段
+- CglibAopProxy或JdkDynamicAopProxy生成Proxy代理类阶段
+
+上一篇中，笔者和大家一起学习了[spring boot aop过程解析之阶段一: AnnotationAwareAspectJAutoProxyCreator加载](https://yaoyuanyy.github.io/2019/04/21/%E7%BB%86%E8%8A%82%E6%8A%A0%E5%87%BA%E8%A1%80%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%B8%80/)。这篇我们说下阶段二：<B>判断beanName或beanClass是否生成Proxy代理类</B>。在spring boot中，每个类在生成代理类时，都会判断是否可以生成代理类
+
+== 带着问题学习
+> 带着问题学习往往起到更好的效果
+
+问题：
+----
+1. spring aop是如果获取和解析@Aspect注解的
+2. spring aop是如果获取和解析@Pointcut注解的
+3. @Pointcut注解的execution(expression)存放在哪个对象，什么时候被使用
+----
+
+== 用例代码
+实际工作中，我们都写过@Aspect的代码吧。我们这里定义一个，便于后面知识点阐述
+----
+@Aspect
+@Component
+public class TimeFeeAspect {
+
+    @Pointcut("execution(* com.yy..rest..*(..))")
+    public void cut(){}
+
+    @Before("cut()")
+    public void doTimeFeeIntercepter(JoinPoint joinPoint) throws Throwable {
+        System.out.println("args:" + joinPoint.getArgs());
+        System.out.println("target" + joinPoint.getTarget().toString());
+    }
+
+}
+----
+如上代码，定义一个Aspect类，目的是对`com.yy..rest`包下所有的类的访问都经过切面，也就是要走`doTimeFeeIntercepter()`方法。
+下面我们通过debug追踪源码，了解实现原理。
+
+== 验证和生成代理的入口
+通过《spring boot aop过程解析之阶段一: AnnotationAwareAspectJAutoProxyCreator加载》我们知道一个bean要生成代理的入口在`AnnotationAwareAspectJAutoProxyCreator`的前后置方法中实现。为了方便我定义了一个`@Component
+CustomInstantiationAwarePostProcessorAdapter`。在`CustomInstantiationAwarePostProcessorAdapter`被创建成bean过程中，由于post-process机制当经过`AnnotationAwareAspectJAutoProxyCreator的postProcessBeforeInstantiation()和postProcessAfterInitialization()`方法时，都会进行代理类的创建逻辑，即判断是否能创建，如果通过则创建。现在说下这两个方法生成代理类逻辑的源码
+
+=== postProcessBeforeInstantiation()
+进入方法，验证逻辑就开始了，如下图代码
+![20201029210116](https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029210116.png)
+验证逻辑为beanClass是否为aop基础结构类型或者是否可以跳过。由于beanClass不是Pointcut、Advice、Advisor等aop基础结构的子类，所以isInfrastructureClass(beanClass)返回false，代码进入shouldSkip(beanClass, beanName)方法逻辑，这个很重要的方法，逻辑很复杂。进入方法内部
+----
+@Override
+protected boolean shouldSkip(Class<?> beanClass, String beanName) {
+    //advisor候选者
+	List<Advisor> candidateAdvisors = findCandidateAdvisors();
+	for (Advisor advisor : candidateAdvisors) {
+		if (advisor instanceof AspectJPointcutAdvisor) {
+			if (((AbstractAspectJAdvice) advisor.getAdvice()).getAspectName().equals(beanName)) {
+				return true;
+			}
+		}
+	}
+	return super.shouldSkip(beanClass, beanName);
+}
+----
+首先获取advisor候选者列表，然后遍历，如果有AspectName等于beanName，说明这个beanName是Aspect，不用生成代理，方法返回true，否则走父类逻辑(返回false)。查看获取advisor候选者方法findCandidateAdvisors()
+----
+@Override
+protected List<Advisor> findCandidateAdvisors() {
+	// Add all the Spring advisors found according to superclass rules.
+	List<Advisor> advisors = super.findCandidateAdvisors();
+	// Build Advisors for all AspectJ aspects in the bean factory.
+	advisors.addAll(this.aspectJAdvisorsBuilder.buildAspectJAdvisors());
+	return advisors;
+}
+----
+方法内部逻辑很简单，但是意义重大，从两个角度获取Advisor。角度一是从beanFactory容器中获取Advisor类；角度二是从beanFactory容器中获取Aspect类。先看其一
+----
+public List<Advisor> findAdvisorBeans() {
+ 	String[] advisorNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
+					this.beanFactory, Advisor.class, true, false);
+			......
+			
+    List<Advisor> advisors = new LinkedList<Advisor>();
+	for (String name : advisorNames) {
+		if (isEligibleBean(name)) {
+	       advisors.add(this.beanFactory.getBean(name, Advisor.class));
+		}
+	}
+	return advisors;
+}
+----
+这里只列出了关键代码，可以看到，从beanFactory容器中获取Advisor的子类name集合，然后验证下name是否合格，合格后获取name对应的bean。但是实际debug代码时，这步却没有获取到Advisor的子类，所以返回的是空list。
+回到findCandidateAdvisors()方法,看其二
+
+----
+BeanFactoryAspectJAdvisorsBuilder类
+public List<Advisor> buildAspectJAdvisors() {
+  List<String> aspectNames = new LinkedList<String>();
+      // 从beanFactory中获取所有的beanName
+      String[] beanNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
+          this.beanFactory, Object.class, true, false);
+      // 遍历beanName集合对beanName进行合格性验证
+      for (String beanName : beanNames) {
+        // 默认true,除非有aop:include使用
+        if (!isEligibleBean(beanName)) { //(1)
+          continue;
+        }
+    
+        Class<?> beanType = this.beanFactory.getType(beanName);
+        if (beanType == null) {
+          continue;
+        }
+        if (this.advisorFactory.isAspect(beanType)) { //(2)
+          aspectNames.add(beanName);
+          AspectMetadata amd = new AspectMetadata(beanType, beanName);
+          // 单例 bean
+          if (amd.getAjType().getPerClause().getKind() == PerClauseKind.SINGLETON) {
+            MetadataAwareAspectInstanceFactory factory =
+                new BeanFactoryAspectInstanceFactory(this.beanFactory, beanName); //(3)
+            List<Advisor> classAdvisors = this.advisorFactory.getAdvisors(factory); //(4)
+            advisors.addAll(classAdvisors);
+          }
+          else { // 单例Prototype bean
+            MetadataAwareAspectInstanceFactory factory =
+                new PrototypeAspectInstanceFactory(this.beanFactory, beanName);
+            advisors.addAll(this.advisorFactory.getAdvisors(factory));
+          }
+        }
+      }
+      return advisors;
+       
+}
+----
+代码(2)处，判断beanType是否为Aspect，实现逻辑为`AnnotationUtils.findAnnotation(clazz, Aspect.class) != null`，开头我定义了一个TimeFeeAspect切面类，所以这里只有TimeFeeAspect符合条件，进入if块里面
+代码(3)处，构造一个带有Aspect metadata和beanFactory的BeanFactoryAspectInstanceFactory实例，传给关键代码(4)块，看代码(4)内部逻辑
+----
+ReflectiveAspectJAdvisorFactory类
+public List<Advisor> getAdvisors(MetadataAwareAspectInstanceFactory aspectInstanceFactory) {
+	Class<?> aspectClass = aspectInstanceFactory.getAspectMetadata().getAspectClass();
+	String aspectName = aspectInstanceFactory.getAspectMetadata().getAspectName();
+
+	MetadataAwareAspectInstanceFactory lazySingletonAspectInstanceFactory =
+			new LazySingletonAspectInstanceFactoryDecorator(aspectInstanceFactory);
+
+	List<Advisor> advisors = new LinkedList<Advisor>();
+	// 获取aspectClass的方法集合
+	for (Method method : getAdvisorMethods(aspectClass)) {
+		Advisor advisor = getAdvisor(method, lazySingletonAspectInstanceFactory, advisors.size(), aspectName); // 关键代码
+		if (advisor != null) {
+			advisors.add(advisor);
+		}
+	}
+	return advisors;
+
+}
+----
+这个方法的目的很明确：获取advisor。方法解析出入参aspectClass的methods，遍历methods从而获取advisor集合，advisor包含advice和pointcut。
+<font color=green>获取methods的方法值得说下</font>
+----
+private List<Method> getAdvisorMethods(Class<?> aspectClass) {
+	final List<Method> methods = new LinkedList<Method>();
+	ReflectionUtils.doWithMethods(aspectClass, new ReflectionUtils.MethodCallback() {
+		@Override
+		public void doWith(Method method) throws IllegalArgumentException {
+			if (AnnotationUtils.getAnnotation(method, Pointcut.class) == null) {
+				methods.add(method);
+			}
+		}
+	});
+	Collections.sort(methods, METHOD_COMPARATOR);
+	return methods;
+}
+----
+这段方法逻辑是通用的：获取一个类中带有(不带有)某注解的方法集合，<font color=green>这个逻辑可以轻易的为你实际所用</font>。
+根据method获取advisor的getAdvisor(..)方法就是核心逻辑了，看其内部
+----
+ReflectiveAspectJAdvisorFactory类
+public Advisor getAdvisor(Method candidateAdviceMethod, MetadataAwareAspectInstanceFactory aspectInstanceFactory,
+		int declarationOrderInAspect, String aspectName) {
+
+    // 验证aspectClass是否有@Aspect注解，其父类是否没有Aspect注解
+    validate(aspectInstanceFactory.getAspectMetadata().getAspectClass());
+    // 核心：生成PointCut
+	AspectJExpressionPointcut expressionPointcut = getPointcut(
+			candidateAdviceMethod, aspectInstanceFactory.getAspectMetadata().getAspectClass());
+	
+	return new InstantiationModelAwarePointcutAdvisorImpl(expressionPointcut, candidateAdviceMethod,
+			this, aspectInstanceFactory, declarationOrderInAspect, aspectName);
+}
+----
+方法首先验证后，根据adviceMethod和aspectClass生成PointCut，然后构造成`InstantiationModelAwarePointcutAdvisorImpl`实例。首先看生成`PointCut`的逻辑
+----
+ReflectiveAspectJAdvisorFactory类
+private AspectJExpressionPointcut getPointcut(Method candidateAdviceMethod, Class<?> candidateAspectClass) {
+    // 获取method的Advice,即Before.class, Around.class, After.class, AfterReturning.class, AfterThrowing.class
+    // AspectJAnnotation包括具体类型的Advice和PointCut的expression
+	AspectJAnnotation<?> aspectJAnnotation =
+			AbstractAspectJAdvisorFactory.findAspectJAnnotationOnMethod(candidateAdviceMethod);
+   // 构造PointCut
+   AspectJExpressionPointcut ajexp =
+			new AspectJExpressionPointcut(candidateAspectClass, new String[0], new Class<?>[0]);
+	ajexp.setExpression(aspectJAnnotation.getPointcutExpression());
+	ajexp.setBeanFactory(this.beanFactory);
+	return ajexp;
+}
+
+AbstractAspectJAdvisorFactory类
+protected static AspectJAnnotation<?> findAspectJAnnotationOnMethod(Method method) {
+	Class<?>[] classesToLookFor = new Class<?>[] {
+			Before.class, Around.class, After.class, AfterReturning.class, AfterThrowing.class, Pointcut.class};
+	// 匹配方法的Advice类型：Before.class, Around.class, After.class, AfterReturning.class, AfterThrowing.class, Pointcut.class
+	// 匹配即返回
+	for (Class<?> c : classesToLookFor) {
+		AspectJAnnotation<?> foundAnnotation = findAnnotation(method, (Class<Annotation>) c);
+		if (foundAnnotation != null) {
+			return foundAnnotation;
+		}
+	}
+	return null;
+}
+----
+
+生成PointCut后，代码回到ReflectiveAspectJAdvisorFactory.getAdvisor()方法的构造`InstantiationModelAwarePointcutAdvisorImpl`实例部分，查看其构造方法
+![20201029210209](https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029210209.png)
+
+可以看到，`InstantiationModelAwarePointcutAdvisorImpl`类包含`AspectJExpressionPointcut`类型的pointcut名属性，adviceName，aspectJAdviceMethod切面方法等属性。同时也会根据advice的type生成对应的xxxAdvice对象。看最后一行`instantiatedAdvice`的解析代码
+----
+private Advice instantiateAdvice(AspectJExpressionPointcut pcut) {
+	return this.aspectJAdvisorFactory.getAdvice(this.aspectJAdviceMethod, pcut,
+			this.aspectInstanceFactory, this.declarationOrder, this.aspectName);
+}
+	
+public Advice getAdvice(Method candidateAdviceMethod, AspectJExpressionPointcut expressionPointcut,
+    	MetadataAwareAspectInstanceFactory aspectInstanceFactory, int declarationOrder, String aspectName) {
+    
+    Class<?> candidateAspectClass = aspectInstanceFactory.getAspectMetadata().getAspectClass(); 
+    AspectJAnnotation<?> aspectJAnnotation =
+    		AbstractAspectJAdvisorFactory.findAspectJAnnotationOnMethod(candidateAdviceMethod);
+    
+    AbstractAspectJAdvice springAdvice;
+    switch (aspectJAnnotation.getAnnotationType()) {
+    	case AtBefore:
+    		springAdvice = new AspectJMethodBeforeAdvice(
+    				candidateAdviceMethod, expressionPointcut, aspectInstanceFactory);
+    		break;
+    	case AtAfter:
+    		springAdvice = new AspectJAfterAdvice(
+    				candidateAdviceMethod, expressionPointcut, aspectInstanceFactory);
+    		break;
+    	case AtAfterReturning:
+    		springAdvice = new AspectJAfterReturningAdvice(
+    				candidateAdviceMethod, expressionPointcut, aspectInstanceFactory);
+    		AfterReturning afterReturningAnnotation = (AfterReturning) aspectJAnnotation.getAnnotation();
+    		if (StringUtils.hasText(afterReturningAnnotation.returning())) {
+    			springAdvice.setReturningName(afterReturningAnnotation.returning());
+    		}
+    		break;
+    	case AtAfterThrowing:
+    		springAdvice = new AspectJAfterThrowingAdvice(
+    				candidateAdviceMethod, expressionPointcut, aspectInstanceFactory);
+    		AfterThrowing afterThrowingAnnotation = (AfterThrowing) aspectJAnnotation.getAnnotation();
+    		if (StringUtils.hasText(afterThrowingAnnotation.throwing())) {
+    			springAdvice.setThrowingName(afterThrowingAnnotation.throwing());
+    		}
+    		break;
+    	case AtAround:
+    		springAdvice = new AspectJAroundAdvice(
+    				candidateAdviceMethod, expressionPointcut, aspectInstanceFactory);
+    		break;
+    	case AtPointcut:
+    		if (logger.isDebugEnabled()) {
+    			logger.debug("Processing pointcut '" + candidateAdviceMethod.getName() + "'");
+    		}
+    		return null;
+    	default:
+    		···
+    }
+    
+    // Now to configure the advice...
+    springAdvice.setAspectName(aspectName);
+    springAdvice.setDeclarationOrder(declarationOrder);
+    String[] argNames = this.parameterNameDiscoverer.getParameterNames(candidateAdviceMethod);
+    if (argNames != null) {
+    	springAdvice.setArgumentNamesFromStringArray(argNames);
+    }
+    springAdvice.calculateArgumentBindings();
+    return springAdvice;
+}
+----
+整个方法就是为了获取Advice，根据切面方法(即`TimeFeeAspect.doTimeFeeIntercepter`)上的advice注解type返回对应的xxxxAdvice实例。这里`doTimeFeeIntercepter`方法上注解了`@Before advice`，所以我们得到是`AspectJMethodBeforeAdvice`对象。`AspectJMethodBeforeAdvice`包含`advice method`, `pointcut`, `aspect class name`。`AspectJMethodBeforeAdvice`相当于`interceptor`。当生成proxy代理类时，`AspectJMethodBeforeAdvice`就是proxy代理类的interceptor，proxy的切入的方法就是`AspectJMethodBeforeAdvice`的`advice method`，即TimeFeeAspect.doTimeFeeIntercepter方法。这样，就把目标类的被切入方法和aspect的想切入的方法关联起来了。所以每次程序走到目标类的被切入方法时，都会先走aspect的想切入的方法。
+
+这样`InstantiationModelAwarePointcutAdvisorImpl`对象就new出来了。包含属性如下图
+![20201029210402](https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029210402.png)
+所以，对外暴露的advisor其实就是`InstantiationModelAwarePointcutAdvisorImpl`对象，当生成proxy代理类的时候传进去的advisor也就是`InstantiationModelAwarePointcutAdvisorImpl`对象了。当我们讲解[spring boot aop过程解析之阶段三：生成Proxy代理类](https://yaoyuanyy.github.io/2019/05/28/%E7%BB%86%E8%8A%82%E6%8A%A0%E5%87%BA%E8%A1%80%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%B8%89/)时接着说这里
+
+到这,<font color=green>Advice class获取到了，Advice的PointCut也拿到了，但是PointCut自身的表达式(Expression)值还没有拿到。</font>接着走代码
+
+回到`postProcessBeforeInstantiation()`方法，由于我们找到了Advisor，所以shouldSkip(beanClass, beanName)返回false，逻辑往下走。又由于`getCustomTargetSource(beanClass, beanName)`返回null，所以这步没有生成入参beanName或beanClass的代理
+![20201029210446](https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029210446.png)
+
+这样，postProcessBeforeInstantiatioin()方法的逻辑就走完了。但是beanName或beanClass还有一次生成代理类的机会，就是`postProcessAfterInitialization()`方法提供的
+
+=== postProcessAfterInitialization()
+
+我们在方法开始处打个断点，F9 debug放开，断点进入postProcessAfterInitialization()方法
+![20201029210536](https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029210536.png)
+可以看到：wrapIfNecessary方法是核心，查看其内部代码
+----
+protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
+	if (beanName != null && this.targetSourcedBeans.contains(beanName)) {
+		return bean;
+	}
+	if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
+		return bean;
+	}
+	if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
+		this.advisedBeans.put(cacheKey, Boolean.FALSE);
+		return bean;
+	}
+
+	// Create proxy if we have advice.
+	Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+	if (specificInterceptors != DO_NOT_PROXY) {
+		this.advisedBeans.put(cacheKey, Boolean.TRUE);
+		Object proxy = createProxy(
+				bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+		this.proxyTypes.put(cacheKey, proxy.getClass());
+		return proxy;
+	}
+
+	this.advisedBeans.put(cacheKey, Boolean.FALSE);
+	return bean;
+}
+----
+可以看到，方法上半部分与postProcessBeforeInstantiation()方法相同，刚才的分析就是shouldSkip(bean.getClass(), beanName)方法，所以我们直接看`getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null)`。这个方法获取Advisor，看其内部逻辑
+----
+protected Object[] getAdvicesAndAdvisorsForBean(Class<?> beanClass, String beanName, TargetSource targetSource) {
+	List<Advisor> advisors = findEligibleAdvisors(beanClass, beanName);
+	return advisors.toArray();
+}
+	
+protected List<Advisor> findEligibleAdvisors(Class<?> beanClass, String beanName) {
+    // 获取Advisor候选者
+	List<Advisor> candidateAdvisors = findCandidateAdvisors();
+	List<Advisor> eligibleAdvisors = findAdvisorsThatCanApply(candidateAdvisors, beanClass, beanName);
+	extendAdvisors(eligibleAdvisors);
+	return eligibleAdvisors;
+}
+----
+findEligibleAdvisors()方法首先获取Advisor候选者(findCandidateAdvisors()的逻辑在postProcessBeforeInstantiation()方法分析时已经说过)，然后通过findAdvisorsThatCanApply()方法<font color=green>检验这些Advisor候选者对beanClass来说是否是合格的Advisor</font>。这里就很关键了，我们看其内部代码
+----
+AopUtils 类
+protected List<Advisor> findAdvisorsThatCanApply( List<Advisor> candidateAdvisors, Class<?> beanClass, String beanName) {
+    return AopUtils.findAdvisorsThatCanApply(candidateAdvisors, beanClass);
+}
+
+public static List<Advisor> findAdvisorsThatCanApply(List<Advisor> candidateAdvisors, Class<?> clazz) {
+	List<Advisor> eligibleAdvisors = new LinkedList<Advisor>();
+	···
+	boolean hasIntroductions = !eligibleAdvisors.isEmpty();
+	for (Advisor candidate : candidateAdvisors) {
+		if (canApply(candidate, clazz, hasIntroductions)) {
+			eligibleAdvisors.add(candidate);
+		}
+	}
+	return eligibleAdvisors;
+}
+----
+方法重点是条件判断。这里只列出部分代码，其实方法将候选者Advisor分为两拨，一拨是IntroductionAdvisor，然后条件判断canApply(candidate, clazz)；另一拨是其他Advisor，然后条件判断canApply(candidate, clazz, hasIntroductions)，我们debug时走的后一个条件判断方法逻辑，看其内部代码逻辑
+----
+AopUtils 类
+public static boolean canApply(Advisor advisor, Class<?> targetClass, boolean hasIntroductions) {
+	if (advisor instanceof PointcutAdvisor) {
+		PointcutAdvisor pca = (PointcutAdvisor) advisor;
+		return canApply(pca.getPointcut(), targetClass, hasIntroductions);
+	}
+}
+
+AopUtils 类
+public static boolean canApply(Pointcut pc, Class<?> targetClass, boolean hasIntroductions) {
+         // 使用Pointcut匹配targetClass,此时的Pointcut.pointcutExpression赋值就隐藏在pc.getClassFilter()中
+	if (!pc.getClassFilter().matches(targetClass)) {
+		return false;
+	}
+
+	MethodMatcher methodMatcher = pc.getMethodMatcher();
+	if (methodMatcher == MethodMatcher.TRUE) {
+		// No need to iterate the methods if we're matching any method anyway...
+		return true;
+	}
+
+	IntroductionAwareMethodMatcher introductionAwareMethodMatcher = null;
+	if (methodMatcher instanceof IntroductionAwareMethodMatcher) {
+		introductionAwareMethodMatcher = (IntroductionAwareMethodMatcher) methodMatcher;
+	}
+
+        //(1)
+	Set<Class<?>> classes = new LinkedHashSet<Class<?>>(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+	classes.add(targetClass);
+	for (Class<?> clazz : classes) {
+		Method[] methods = ReflectionUtils.getAllDeclaredMethods(clazz);
+		for (Method method : methods) {
+			if ((introductionAwareMethodMatcher != null &&
+					introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)) ||
+					methodMatcher.matches(method, targetClass)) {//(2)
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+----
+整个方法都在判断targerClass是否匹配这个pointcut，由于此时的pointcut.pointcutExpression还没有赋值呢，所以在判断匹配之前，需要<font color=green>pointcut.pointcutExpression赋值</font>，所以整个AopUtis.canApply分为两部分：
+1. 给pointcut.pointcutExpression赋值
+2. targerClass匹配pointcut检验
+而第一部分的赋值在pc.getClassFilter()里，看方法代码
+
+----
+AspectJExpressionPointcut类
+public ClassFilter getClassFilter() {
+	checkReadyToMatch();
+	return this;
+}
+	
+private void checkReadyToMatch() 
+	if (this.pointcutExpression == null) {
+		this.pointcutClassLoader = determinePointcutClassLoader();
+		this.pointcutExpression = buildPointcutExpression(this.pointcutClassLoader);
+	}
+}
+
+private PointcutExpression buildPointcutExpression(ClassLoader classLoader) {
+	PointcutParser parser = initializePointcutParser(classLoader);
+	return parser.parsePointcutExpression(replaceBooleanOperators(getExpression()),
+			this.pointcutDeclarationScope, pointcutParameters);
+}
+
+PointcutParser类
+public PointcutExpression parsePointcutExpression(String expression, Class<?> inScope, PointcutParameter[] formalParameters)  { 
+	Pointcut pc = resolvePointcutExpression(expression, inScope, formalParameters);
+	PointcutExpressionImpl pcExpr = new PointcutExpressionImpl(pc, expression, formalParameters, getWorld());
+	return pcExpr;
+}
+
+protected Pointcut resolvePointcutExpression(String expression, Class<?> inScope, PointcutParameter[] formalParameters) {
+	PatternParser parser = new PatternParser(expression);
+	parser.setPointcutDesignatorHandlers(pointcutDesignators, world);
+	Pointcut pc = parser.parsePointcut();
+	IScope resolutionScope = buildResolutionScope((inScope == null ? Object.class : inScope), formalParameters);
+	pc = pc.resolve(resolutionScope);
+	return pc;
+}
+----
+以上代码的核心逻辑就是给AspectJExpressionPointcut.PointcutExpression赋值，这个就是开篇时的例子代码：@Pointcut("execution(* com.yy..rest..*(..))")。赋值操作是通过PointcutParser、PatternParser和Pointcut来完成的。具体的赋值过程入口为pc = pc.resolve(resolutionScope)。resolve方法调用栈：
+----
+Pointcut.resolve()
+-this.resolveBindings()
+--searchType.findPointcut(name)
+searchType就是TimeFeeAspect，name就是cut方法名
+       ... 经过getPointcuts().iterator循环 ...
+---Java15ReflectionBasedReferenceTypeDelegate.getDeclaredPointcuts()
+----AjType.getDeclaredPointcuts()
+-----Method[] methods = clazz.getDeclaredMethods(）
+----
+clazz就是TimeFeeAspect,<font color=green>循环methods，判断method是否有@Pointcut注解：Pointcut pcAnn = method.getAnnotation(Pointcut.class);
+拿到pcAnn.value()。构造成一个Pointcut，再构造成一个PointcutExpressionImpl，再构造成一个PointcutImpl。最后AspectJExpressionPointcut.PointcutExpression被赋值了</font>。切入点的表达式已经有了，接下来要做的自然是使用表达式来验证目标了。这部分即是`AopUtils.canApply()`方法的第二部分的逻辑。
+
+下面看`AopUtils.canApply()`方法的第二部分：targerClass匹配pointcut检验，首先看`pc.getClassFilter().matches(targetClass)`如果匹配，代码往下走；如果不匹配，直接返回false。接着走(2)处代码，即获取targerClass的所有接口和父类，遍历每个类的每个方法，使用Pointcut的expression去match每个方法，一旦有匹配上，返回true，退出遍历。所以匹配的逻辑就是重点了。这里列下关键的代码段
+----
+AspectJExpressionPointcut类
+public boolean matches(Method method, Class<?> targetClass, boolean beanHasIntroductions) {
+	Method targetMethod = AopUtils.getMostSpecificMethod(method, targetClass);
+	ShadowMatch shadowMatch = getShadowMatch(targetMethod, method);  //关键代码
+	if (shadowMatch.alwaysMatches()) {
+	  return true;
+	}
+	else if (shadowMatch.neverMatches()) {
+	  return false;
+	}
+}
+
+// 可以看到这个方法中使用了双重检查机制(double check)，double check结合synchronized可以有效的
+// 避免锁的竞争，这个组合我们可以在很多地方使用，想想在你的项目中使用它，很棒，面试也是高频知识点
+private ShadowMatch getShadowMatch(Method targetMethod, Method originalMethod) {
+  // Avoid lock contention for known Methods through concurrent access...
+  ShadowMatch shadowMatch = this.shadowMatchCache.get(targetMethod);
+  if (shadowMatch == null) {
+    synchronized (this.shadowMatchCache) {
+        shadowMatch = this.shadowMatchCache.get(targetMethod);
+        if (shadowMatch == null) {
+					// pointcutExpression对象包含KindedpPointcut类型的属性pointcut "execution(* com.yy..rest..*(..))"
+					// KindedpPointcut包含SignaturePattern类型的属性signature "* com.yy..rest..*(..)"
+          shadowMatch = this.pointcutExpression.matchesMethodExecution(methodToMatch);  //关键代码
+        }
+    }
+  }
+}
+
+PointcutExpressionImpl类
+private ShadowMatchImpl getShadowMatch(Shadow forShadow) {
+	org.aspectj.util.FuzzyBoolean match = pointcut.match(forShadow); //关键代码
+	Test residueTest = Literal.TRUE;
+	ExposedState state = getExposedState();
+	if (match.maybeTrue()) {
+		residueTest = pointcut.findResidue(forShadow, state);
+	}
+	ShadowMatchImpl sm = new ShadowMatchImpl(match, residueTest, state, parameters);
+	sm.setMatchingContext(this.matchContext);
+	return sm;
+}
+
+WildTypePattern类，真正的验证逻辑就在这个类。
+protected boolean matchesExactly(ResolvedType type, ResolvedType annotatedType) {
+	String targetTypeName = type.getName();
+
+	// System.err.println("match: " + targetTypeName + ", " + knownMatches); //Arrays.asList(importedPrefixes));
+	// Ensure the annotation pattern is resolved
+	annotationPattern.resolve(type.getWorld());
+
+        // 四个方法的&&结果
+	return matchesExactlyByName(targetTypeName, type.isAnonymous(), type.isNested()) && matchesParameters(type, STATIC)
+			&& matchesBounds(type, STATIC)
+			&& annotationPattern.matches(annotatedType, type.temporaryAnnotationTypes).alwaysTrue();
+}
+----
+- `matchesExactlyByName(..)`比较全限定类名是否匹配。会把pointcut的expression和目标类的全限定名变为.分隔的数组，对应下标值依次比较。像这样：`pattern[pi].matches(target[ti])`。
+- `matchesParameters(..)`比较方法的参数是否匹配
+- `matchesBounds(..)`比较方法或参数带?时是否匹配
+- `annotationPattern(..)`比较方法或参数的注解是否匹配
+当然，根据&&短路原则，前面的方法返回false时，后面的方法不用走了，直接返回结果。本例debug时，pointcut为"execution(* com.yy..rest..*(..))，目标target类为com.yy.custom_spring.custom5.CustomInstantiationAwarePostProcessorAdapter，两者比较，包名不一样，所以不匹配，返回false
+
+另外，targerClass是否匹配pointcut的过程我们也可以通过debug的调用栈来观察调用关系，如下图。这样，你自己debug走代码的时候体会的更直接
+
+![20201029210636](https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029210636.png)
+
+到这里，spring boot aop过程解析之阶段二判断beanName或beanClass是否生成Proxy代理类就走完了。没有面面俱到，但关键地方都有提到。如有任何疑问和问题，欢迎一起交流进步，可以留言或邮箱 skyler_11@163.com yaoyihao1@gmail.com
+
+=== 问题回答
+
+- 针对文章开头的问题我们可以回答下了：
+
+问题：
+----
+1. spring aop是如果获取和解析Aspect(advisor)切面类的
+2. spring aop是如果获取和解析@Pointcut注解的
+3. @Pointcut注解的execution(expression)存放在哪个对象，什么时候被使用
+4. @Before注解spring aop是如果获取和解析的，spring aop如何找到@Before对应的Pointcut？
+5. 什么时候什么位置在真实对象方法前后加上代理逻辑的
+----
+答案：
+----
+1. spring是从两个方面获取Aspect(advisor)切面类的
+一方面：String[] advisorNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(this.beanFactory, Advisor.class, true, false);
+另一方面：String[] beanNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(this.beanFactory, Object.class, true, false);然后遍历beanNames，找到对应的bean，看看这个bean是否有@Aspect注解，有就是Aspect(advisor)
+
+
+2. spring是找到并解析Aspect类中Advice方法的参数，如@Before("cut()") public void doTimeFeeIntercepter方法。具体的解析位置是AspectJExpressionPointcut=ReflectiveAspectJAdvisorFactory.getPointcut()方法，这时的AspectJExpressionPointcut只有值cut(),表达式还没有赋值呢。然后再根据cut()重新解析Aspect类，找到Expression并赋值给AspectJExpressionPointcut，这步是在Pointcut.resolve()中完成的
+
+3. execution(expression)存放在KindedPointcut对象中，在验证targerClass是否匹配时被使用
+----
+
+如有任何疑问和问题，欢迎一起交流进步，可以留言或邮箱 skyler_11@163.com yaoyihao1@gmail.com

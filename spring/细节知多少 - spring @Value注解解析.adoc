@@ -1,0 +1,506 @@
+= 细节知多少 - spring @Value注解解析
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+== 缘由
+
+​@Value是开发过程中使用比较频繁的注解之一，它的作用是将配置文件中key对应的值赋值给它标注的属性。对于常见的知识点，我们应该了解它功能实现的本质。对我们自己的技术提升很有帮助。
+
+== 原理
+
+​在spring中是由`AutowiredAnnotationBeanPostProcessor`解析处理@Value注解。`AutowiredAnnotationBeanPostProcessor`是一个`BeanPostProcessor`，所以每个类的实例化都过经过`AutowiredAnnotationBeanPostProcessor`类。当`post-processor`处理bean时，会解析bean Class的所有属性，在解析时会判断属性上是否标有`@Value`注解，有就解析这个`@Value`的属性值，将解析后结果放入`AutowiredFieldElement`类型`InjectionMetaData.checkedElements`中，当给属性赋值时会使用`checkedElements`，从而得到`@Value`注解的`Filed`属性，调用`AutowiredFieldElement.inject()`方法进行解析，解析时会使用`DefaultListableBeanFactory`(用于解析${})和`TypeConverter`(用于类型转换)，从而得到`age`属性的值，最后调用`field.set(bean, value)`，从而获取的值赋给`bean的field`。
+
+​整个过程就是这样，有点抽象吧，下面我们一起debug源码，更清晰简明的了解@Value的原理。
+
+
+> debug源码是我觉得掌握其原理最好的方式
+
+
+
+== 准备
+
+1. 一个可以运行的spring boot project
+2. 提供一个controller类，包含一个被@Value标注的属性：`int age`
+
+----
+@RestController
+@Slf4j
+public class MyController {
+
+    @Value("${user.age:11}")
+    private int age;
+  
+    public int getAge(){
+        log.info("age:{}", age)
+        return age;
+    }
+}
+----
+
+
+
+== 一起debug解开神秘
+
+=== 入口 
+
+> 核心：存。将class的标注@Value的所有信息转存InjectionMetadata.InjectedElement集合中
+
+`@Value`同@`Autowired`一样，是由`AutowiredAnnotationBeanPostProcessor`解析处理，处理`@Value`的入口为`AutowiredAnnotationBeanPostProcessor.buildAutowiringMetadata(Class clazz)`。看代码内部
+
+----
+AutowiredAnnotationBeanPostProcessor class
+private InjectionMetadata buildAutowiringMetadata(final Class<?> clazz) {
+    List<InjectionMetadata.InjectedElement> elements = new ArrayList<>();
+    Class<?> targetClass = clazz;
+
+    do {
+        final List<InjectionMetadata.InjectedElement> currElements = new ArrayList<>();
+
+        // 解析targetClass的所有属性
+        ReflectionUtils.doWithLocalFields(targetClass, field -> {
+            AnnotationAttributes ann = findAutowiredAnnotation(field);
+            if (ann != null) {
+                // 由此可知，static修改的属性无法使用@Value注解赋值
+                if (Modifier.isStatic(field.getModifiers())) {
+                    return;
+                }
+                boolean required = determineRequiredStatus(ann);
+                currElements.add(new AutowiredFieldElement(field, required));
+            }
+        });
+
+        ReflectionUtils.doWithLocalMethods(targetClass, method -> {
+            Method bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
+            AnnotationAttributes ann = findAutowiredAnnotation(bridgedMethod);
+            if (ann != null && method.equals(ClassUtils.getMostSpecificMethod(method, clazz))) {
+                // 由此可知，static修改的方法无法使用@Value注解赋值
+                if (Modifier.isStatic(method.getModifiers())) {
+                    return;
+                }
+                boolean required = determineRequiredStatus(ann);
+                PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+                currElements.add(new AutowiredMethodElement(method, required, pd));
+            }
+        });
+
+        elements.addAll(0, currElements);
+        targetClass = targetClass.getSuperclass();
+    }
+    while (targetClass != null && targetClass != Object.class);
+
+    return new InjectionMetadata(clazz, elements);
+}
+----
+
+这个方法用于遍历和解析clazz的所有filed和method，解析其上的`@Value`、`@Autowired`、`@Inject`注解，然后放入类型为`InjectionMetadata.InjectedElement`的`elements`中，`elements`再放入`metadata(=new InjectionMetadata(clazz, elements)) `中。再将`metadata`放入缓存`injectionMetadataCache`中，后面会从缓存中取值
+
+下面，我们重点看属性的解析过程，代码如下
+
+----
+AutowiredAnnotationBeanPostProcessor class
+private AnnotationAttributes findAutowiredAnnotation(AccessibleObject ao) {
+    if (ao.getAnnotations().length > 0) {  // autowiring annotations have to be local
+        for (Class<? extends Annotation> type : this.autowiredAnnotationTypes) {
+            AnnotationAttributes attributes = AnnotatedElementUtils.getMergedAnnotationAttributes(ao, type);
+            if (attributes != null) {
+                return attributes;
+            }
+        }
+    }
+    return null;
+}
+----
+
+`autowiredAnnotationTypes`包含了`@Value`、`@Autowired`、`@Inject`。如果属性解析到了响应注解，就将注解的信息返回给上层。解析注解过程这里不详细说了
+
+
+
+=== 解析
+
+>>>>>> 核心：用。使用InjectionMetadata.InjectedElement，解析并赋值给clazz的属性，即赋值MyController.age
+
+上面的逻辑主要为解析@Value的信息存入`InjectionMetadata.InjectedElement`集合，下面的逻辑为使用`InjectionMetadata.InjectedElement`，解析出真正的值，从而赋值给属性。下面看看怎么解析并赋值的
+
+
+
+首先，我们通过获取`InjectionMetadata.InjectedElement`对象数据，其实是从`injectionMetadataCache`缓存中获取的。获取的地点代码如下
+
+----
+AutowiredAnnotationBeanPostProcessor class
+public PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
+    // 获取，从injectionMetadataCache缓存获取
+    InjectionMetadata metadata = findAutowiringMetadata(beanName, bean.getClass(), pvs);
+    // 使用
+    metadata.inject(bean, beanName, pvs);
+    return pvs;
+}
+----
+
+我们重点看使用部分，即`metadata.inject(bean, beanName, pvs)`，看方法名就知道，要注入属性值。看代码内部
+
+----
+InjectionMetadata class
+public void inject(Object target, @Nullable String beanName, @Nullable PropertyValues pvs) {
+    if (!checkedElements.isEmpty()) {
+        for (InjectedElement element : checkedElements) {
+            element.inject(target, beanName, pvs);
+        }
+    }
+}
+----
+
+方法逻辑很简单，遍历集合分别调用`inject()`方法。看其内部代码逻辑
+
+----
+InjectionMetadata.InjectedElement class
+protected void inject(Object bean, @Nullable String beanName, @Nullable PropertyValues pvs) {
+    Field field = (Field) this.member;
+    Object value;
+    if (this.cached) {
+        value = resolvedCachedArgument(beanName, this.cachedFieldValue);
+    }
+    else {
+        DependencyDescriptor desc = new DependencyDescriptor(field, this.required);
+        desc.setContainingClass(bean.getClass());
+        Set<String> autowiredBeanNames = new LinkedHashSet<>(1);
+        // 获取类型转换器
+        TypeConverter typeConverter = beanFactory.getTypeConverter();
+        // 核心逻辑：解析field注解
+        value = beanFactory.resolveDependency(desc, beanName, autowiredBeanNames, typeConverter);
+        // ··· 值缓存起来 略
+    }
+    if (value != null) {
+        ReflectionUtils.makeAccessible(field);
+        field.set(bean, value);
+    }
+    
+}
+----
+
+方法的核心为使用`DependencyDescriptor`包装field，使用`beanFactory`解析`DependencyDescriptor`从而得到属性值。下面看其`beanFactory.resolveDependency()`内部代码。(注：`beanFactory`是通过`BeanFactoryAware`注入的，我们可学习这种用法)
+
+----
+DefaultListableBeanFactory class
+public Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
+			@Nullable Set<String> autowiredBeanNames, @Nullable TypeConverter typeConverter) {
+
+    descriptor.initParameterNameDiscovery(getParameterNameDiscoverer());
+    // 处理Optional类型的field，与@Value无关，暂略
+    if (Optional.class == descriptor.getDependencyType()) {
+        return createOptionalDependency(descriptor, requestingBeanName);
+    }
+    // 处理ObjectFactory和ObjectProvider类型的field，与@Value无关，暂略
+    else if (ObjectFactory.class == descriptor.getDependencyType() ||
+            ObjectProvider.class == descriptor.getDependencyType()) {
+        return new DependencyObjectProvider(descriptor, requestingBeanName);
+    }else {
+        // 核心: 真正解析field的方法
+        result = doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter);
+        return result;
+    }
+}
+----
+
+从方法的入参可以看到，这个类型转换器`TypeConverter`已经传进来了，需要类型转换时就使用`TypeConverter`它进行转换，`TypeConverter`是从`BeanFactory.getTypeConverter()`获取来的。
+
+<font color="green"> ***doResolveDependency()解析@Value注解的大管家，它不负责具体解析，但它说明了解析的整个流程*** </font>。看`doResolveDependency()`方法代码逻辑
+
+----
+DefaultListableBeanFactory class
+public Object doResolveDependency(DependencyDescriptor descriptor, @Nullable String beanName,
+			@Nullable Set<String> autowiredBeanNames, @Nullable TypeConverter typeConverter) {
+
+    InjectionPoint previousInjectionPoint = ConstructorResolver.setCurrentInjectionPoint(descriptor);
+    try {
+        // field属性的类型
+        Class<?> type = descriptor.getDependencyType();
+        // 1. 获取(不只是)@Value注解的value方法的值 如此例中value方法值为: ${test.age:11}      (1)
+        Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
+        if (value != null) {
+            // 如果value是String类型，走这里。此例value为: ${test.age:11}字符串
+            if (value instanceof String) {
+                // 2. 开始解析value的值 
+                String strVal = resolveEmbeddedValue((String) value);
+                BeanDefinition bd = (beanName != null && containsBean(beanName) ?
+                        getMergedBeanDefinition(beanName) : null);
+                value = evaluateBeanDefinitionString(strVal, bd);
+            }
+            TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
+            try {
+                // 3. 开始解析value的值 
+                return converter.convertIfNecessary(value, type, descriptor.getTypeDescriptor());
+            }
+            catch (UnsupportedOperationException ex) {
+                ...
+            }
+        }
+        ... 省略解析@Autowired注解的逻辑
+    }finally {
+        ConstructorResolver.setCurrentInjectionPoint(previousInjectionPoint);
+    }
+}
+----
+
+
+
+此方法为解析`@Value`注解属性值的核心方法了。逻辑分为四步：
+
+1. 获取(不只是)`@Value`注解的value方法的值。通过`descriptor`解析出注解的`value方法`的值
+2. 开始解析value的值
+3. 如果值为String类型，会特殊的解析这个值，特殊解析的意思是如果值为` ${test.age:11}`，会解析出值为: `"11"`，这个解析过程使用的是`PropertySourcesPlaceholderConfigurer.processProperties()`方法
+
+说的有点抽象，举个例子。如下，定义了一个@Value注解的变量
+
+----
+@Value("${user.age:11}")
+private int age;
+
+第一步：通过descriptor得到${user.age:11}
+第二步：拆解${user.age:11}，得到user.age:11，获取值，没有获取到，以:或${}为标准再拆解，最后得到值
+第三步：此时得到的值是String类型的，需要转换成目标变量声明的类型，此处类型为int
+----
+
+
+
+==== one step
+
+首先详细了解下第一步。获取`@Value的value()`方法的值
+
+----
+
+QualifierAnnotationAutowireCandidateResolver class
+public Object getSuggestedValue(DependencyDescriptor descriptor) {
+		Object value = findValue(descriptor.getAnnotations());
+    if (value == null) {
+        MethodParameter methodParam = descriptor.getMethodParameter();
+        if (methodParam != null) {
+            value = findValue(methodParam.getMethodAnnotations());
+        }
+    }
+    return value;
+}
+protected Object findValue(Annotation[] annotationsToSearch) {
+    if (annotationsToSearch.length > 0) {   // qualifier annotations have to be local
+        AnnotationAttributes attr = AnnotatedElementUtils.getMergedAnnotationAttributes(
+                AnnotatedElementUtils.forAnnotations(annotationsToSearch), this.valueAnnotationType);
+        if (attr != null) {
+            return extractValue(attr);
+        }
+    }
+    return null;
+}	
+
+----
+
+以上两个方法主要是解析`@Value`注解，再通过`AnnotatedElementUtils.getMergedAnnotationAttributes()`方法得到注解的属性集合，从而获取到`value()`方法的值
+
+==== two step
+
+解析传入的${key:defaultValue}形式的字符串，从而得到key的实际的值。
+
+----
+public String resolveEmbeddedValue(@Nullable String value) {
+    String result = value;
+    for (StringValueResolver resolver : this.embeddedValueResolvers) {
+        result = resolver.resolveStringValue(result);
+        return result;
+    }
+}
+----
+
+核心方法为`resolver.resolveStringValue(result)`方法，resolver实际为`StringValueResolver类型的lambda表达式`，这个表示式定义在了`PropertySourcesPlaceHolderConfigurer.processProperties()`方法中，这里debug是需要注意下，如果你不了解lambda，可能会比较朦胧。代码如下
+
+----
+PropertySourcesPlaceHolderConfigurer class
+protected void processProperties(ConfigurableListableBeanFactory beanFactoryToProcess,
+			final ConfigurablePropertyResolver propertyResolver) throws BeansException {
+
+    propertyResolver.setPlaceholderPrefix(this.placeholderPrefix);
+    propertyResolver.setPlaceholderSuffix(this.placeholderSuffix);
+    propertyResolver.setValueSeparator(this.valueSeparator);
+
+    StringValueResolver valueResolver = strVal -> {
+        String resolved = (this.ignoreUnresolvablePlaceholders ?
+                propertyResolver.resolvePlaceholders(strVal) :
+                propertyResolver.resolveRequiredPlaceholders(strVal));
+        if (this.trimValues) {
+            resolved = resolved.trim();
+        }
+        return (resolved.equals(this.nullValue) ? null : resolved);
+    };
+
+    doProcessProperties(beanFactoryToProcess, valueResolver);
+}
+----
+
+lambda会扰乱你的调用栈展示，下面截图展示真实调用栈的信息
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029203940.png[20201029203940]
+
+上面代码中`processProperties`方法会调用`PropertySourcesPropertyResolver.resolveRequiredPlaceholders()`方法来解析入参，而它又会调用`PropertySourcesPropertyResolver.getPropertyAsRawString()`和`PropertyPlaceholderHelper.replacePlaceholders()`。代码如下
+
+----
+AbstractPropertyResoler class
+public String resolveRequiredPlaceholders(String text) throws IllegalArgumentException {
+    if (this.strictHelper == null) {
+        this.strictHelper = createPlaceholderHelper(false);
+    }
+    return doResolvePlaceholders(text, this.strictHelper);
+}
+
+private String doResolvePlaceholders(String text, PropertyPlaceholderHelper helper) {
+    return helper.replacePlaceholders(text, this::getPropertyAsRawString);
+}
+----
+
+> PropertySourcesPropertyResolver.getPropertyAsRawString()方法逻辑
+
+`PropertySourcesPropertyResolver.getPropertyAsRawString()`负责获取key的值，因为`PropertySourcesPropertyResolver.持有propertySources变量`，这个变量与`Environment的propertySources`变量是同步的，所以`propertySource.getProperty(key)`可以获取到配置文件中的值，代码如下
+
+----
+PropertySourcesPropertyResolver class
+protected String getPropertyAsRawString(String key) {
+    return getProperty(key, String.class, false);
+}
+	
+protected <T> T getProperty(String key, Class<T> targetValueType, boolean resolveNestedPlaceholders) {
+    if (this.propertySources != null) {
+        for (PropertySource<?> propertySource : this.propertySources) {
+            if (logger.isTraceEnabled()) {
+                logger.trace("Searching for key '" + key + "' in PropertySource '" +
+                        propertySource.getName() + "'");
+            }
+            Object value = propertySource.getProperty(key);
+            if (value != null) {
+                if (resolveNestedPlaceholders && value instanceof String) {
+                    value = resolveNestedPlaceholders((String) value);
+                }
+                logKeyFound(key, propertySource, value);
+                return convertValueIfNecessary(value, targetValueType);
+            }
+        }
+    }
+    return null;
+}
+----
+
+可以看到，最后`propertySource.getProperty(key)`获取值返回。
+
+> PropertyPlaceholderHelper.replacePlaceholders()方法逻辑
+
+`PropertyPlaceholderHelper.replacePlaceholders()`负责解析`${key: defaultValue}`，将它拆解以获取key，再用`propertySource.getProperty(key)`获取值。而具体的拆解逻辑在`parseStringValue()`方法中，代码如下
+
+----
+public String replacePlaceholders(String value, PlaceholderResolver placeholderResolver) {
+    Assert.notNull(value, "'value' must not be null");
+    return parseStringValue(value, placeholderResolver, null);
+}
+
+protected String parseStringValue(
+			String value, PlaceholderResolver placeholderResolver, @Nullable Set<String> visitedPlaceholders) {
+
+    int startIndex = value.indexOf(this.placeholderPrefix);
+    if (startIndex == -1) {
+        return value;
+    }
+
+    StringBuilder result = new StringBuilder(value);
+    while (startIndex != -1) {
+        ... 略 具体拆解${xx:yy},不展示了，自己来看吧，否则代码太多影响了要主要的逻辑
+            // 递归调用
+            placeholder = parseStringValue(placeholder, placeholderResolver, visitedPlaceholders);
+            // 获取placeholder实际为key，最终调用propertySource.getProperty(key)获取值
+            String propVal = placeholderResolver.resolvePlaceholder(placeholder);
+        ... 略 同上
+    }	
+    return result.toString();
+}
+----
+
+
+
+可以看到这个key一个拆解一层得到一个新key，尝试调用`placeholderResolver.resolvePlaceholder(新key)`获取值，如果没有获取到，再拆解一层得到一个新key，再调用`placeholderResolver.resolvePlaceholder(新key)`获取值的循环过程，直到获取到获取不能拆解为止的过程(因为key的形式可以是${xx:${yy:zz}})。此时得到的值时String类型的。并不是我们赋值变量的类型，所以接下来进行类型转换。
+
+=== Three step
+
+将String类型的值转换成目标变量声明的类型。
+
+我们回到`DefaultListableBeanFactory.doResolveDependency()`方法，此时代码来到了`converter.convertIfNecessary`方法处，即类型转换。看方法代码
+
+----
+TypeConverterSupport class
+public <T> T convertIfNecessary(@Nullable Object value, @Nullable Class<T> requiredType,
+        @Nullable TypeDescriptor typeDescriptor) throws TypeMismatchException {
+    return this.typeConverterDelegate.convertIfNecessary(null, null, value, requiredType, typeDescriptor);
+}
+
+TypeConverterDelegate class
+public <T> T convertIfNecessary(@Nullable String propertyName, @Nullable Object oldValue, @Nullable Object newValue,
+			@Nullable Class<T> requiredType, @Nullable TypeDescriptor typeDescriptor)  {
+    // conversionService包含着所有的转换器，如下图
+    ConversionService conversionService = this.propertyEditorRegistry.getConversionService();
+    TypeDescriptor sourceTypeDesc = TypeDescriptor.forObject(newValue);
+    if (conversionService.canConvert(sourceTypeDesc, typeDescriptor)) {
+        return (T) conversionService.convert(newValue, sourceTypeDesc, typeDescriptor);
+    }
+}
+----
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029204039.png[20201029204039]
+
+方法首先找到能转换(string -> int)的转换器，然后开始转换。怎么找到能转换的转换器这里不说了，自己跟下吧。开始转换的核心是确定对应的`xxxtoyyyConverter`, `xxxtoyyyConverter`内部调用的是本质的工具类。如String转int，工具类为: `NumberUtils.parseNumber(source, this.targetType)`，这个工具类方法比较熟悉和亲切吧，所以spring很多功能最终都是调用最本质的java工具类。`xxxtoyyyConverter`是一大堆的，如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029204117.png[20201029204117]
+
+
+以上就是将`@Value`修饰的变量赋值的整个过程了，从解析注解的`value()`方法的值key，再到解析key为新key，再到配置文件获取key(新key)的值，最后对获取的值进行类型转换，最最后通过`field.set(bean, value)`赋值给目标变量
+
+
+
+下面将整个解析过程的调用栈罗列下
+
+=== 整体调用栈
+
+----
+AbstractAutowireCapableBeanFactory.createBean()                                    
+-AbstractAutowireCapableBeanFactory.doCreateBean()                               
+--AbstractAutowireCapableBeanFactory.applyMergedBeanDefinitionPostProcessors()   
+---AutowiredAnnotationBeanPostProcessor.postProcessMergedBeanDefinition()        
+----AutowiredAnnotationBeanPostProcessor.findAutowiringMetadata()                
+-----AutowiredAnnotationBeanPostProcessor.buildAutowiringMetadata() 
+========以上是存逻辑，以下是用逻辑========
+--AbstractAutowireCapableBeanFactory.populateBean()                               
+---AutowiredAnnotationBeanPostProcessor.postProcessProperties()                  
+----AutowiredAnnotationBeanPostProcessor.findAutowiringMetadata()                
+-----InjectionMetadata.inject()                                                  
+------(InjectionMetadata.InjectedElement)AutowiredFieldElement.inject()
+-------DefaultListableBeanFactory.resolveDependency()
+--------DefaultListableBeanFactory.doResolveDependency() ---核心
+---------AbstractBeanFactory.resolveEmbeddedValue()
+----------StringValueResolver lambda子类.resolveStringValue()
+-----------PropertySourcesPropertyResolver.resolveRequiredPlaceholders()
+------------AbstractPropertyResolver.getPropertyAsRawString()
+-------------PropertyPlaceholderHelper.replacePlaceholders()
+--------------PropertySource.getProperty()
+-----------PropertyPlaceholderHelper.parseStringValue() 递归
+------------AbstractPropertyResolver.resolvePlaceholder()
+-------------PropertySource.getProperty()
+---------SimpleTypeConverter.convertIfNecessary()
+----------TypeConverterDelegate.convertIfNecessarT()
+-----------ConversionService.canConvert()
+-----------ConversionService.convert()
+
+----

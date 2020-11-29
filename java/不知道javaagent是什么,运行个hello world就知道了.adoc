@@ -1,0 +1,147 @@
+= 不知道javaagent是什么,运行个hello world就知道了
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+从事java开发的同学，或多或少听说过`java探针`/`javaagent`这个术语。本文不说它的定义，不说它的原理，不说它的高大上的作用，只说它的"hello world"。即运行一个最简单的例子，实际看看效果，有了真切的感受后，产生真切清晰的认识，以便快速的入门并深入探索。
+
+== 编码
+用idea创建个maven项目，如下图，项目名称随意，这里我的项目名为：microservice-comb-javaagent
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200310194628.png[20200310194628.png]
+
+代码如下
+首先，创建一个类：AgentDemo
+----
+public class AgentDemo {
+    /**
+     * 该方法在main方法之前运行，与main方法运行在同一个JVM中
+     */
+    public static void premain(String agentArgs, Instrumentation inst) {
+        System.out.println("------ premain方法 有两个入参 ------ agentArgs:" + agentArgs + " inst:" + inst.toString());
+    }
+
+    /**
+     * 如果不存在 {@link AgentDemo#premain(String, Instrumentation)}, 则会执行本方法
+     */
+    public static void premain(String agentArgs) {
+        System.out.println("------ premain方法，有一个入参 ------ agentArgs:" + agentArgs);
+    }
+}
+----
+NOTE: AgentDemo的全限定名会在pom.xml中标签`Premain-Class`引用
+
+其次，再创建一个类：AgentTest
+----
+public class AgentTest {
+    public static void main(String[] args) {
+        System.out.println(" ------ main方法");
+    }
+}
+----
+
+再次，在项目的pom.xml中添加
+----
+   ··· 略
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+                <source>1.8</source>
+                <target>1.8</target>
+            </configuration>
+        </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-jar-plugin</artifactId>
+            <configuration>
+                <archive>
+                    <manifestEntries>
+                        <!-- 值为包含premain方法的类. 启动方式为命令行启动时,javaagent JAR文件清单必须包含 Premain-Class 属性, 代理类必须实现 public static premain()-->
+                        <Premain-Class>com.skyler.cobweb.agent.AgentDemo</Premain-Class>
+                        <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                        <Can-Retransform-Classes>true</Can-Retransform-Classes>
+                    </manifestEntries>
+                </archive>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+----
+== 打jar包
+将`microservice-comb-javaagent`打成`jar`包。运行时会使用这个`Jar`包.打包命令:`mvn clean package`。结果如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200310200510.png[20200310200510.png]
+
+== 运行
+你可以有两个运行方式：`idea中直接运行`和`命令行运行`
+- idea中直接运行
+
+需要配置下项目的运行配置的`VM options`，如下图，形式为`-javaagent:jarpath[=options]`; 我的内容为：`-javaagent:/Users/xx/microservice-comb/microservice-comb-javaagent/target/microservice-comb-javaagent-1.0.0-SNAPSHOT.jar=hello world`
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200310211044.png[20200310211044.png]
+
+然后，运行AgentTest.main方法，结果如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200310201519.png[20200310201519.png]
+
+可以看到，打印出了AgentDemo.premain方法的信息
+
+- 命令行运行
+`cd`到项目microservice-comb-javaagent的/target/classes路径下
+----
+$ cd xx/target/classes
+$ java -javaagent:/Users/xx/microservice-comb/microservice-comb-javaagent/target/microservice-comb-javaagent-1.0.0-SNAPSHOT.jar="hello world"  com.skyler.cobweb.agent.AgentTest
+----
+可以看到，同样打印出了AgentDemo.premain方法的信息
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200310203649.png[20200310203649.png]
+
+== 收获
+
+这里有个对比，运行时是否加上`-javaagent:jar`，这个给你的感受会很明显和透彻。来再操作下
+
+加上时
+----
+$ cd /Users/xx/microservice-comb/microservice-comb-javaagent/target/classes
+$ java -javaagent:/Users/xx/microservice-comb/microservice-comb-javaagent/target/microservice-comb-javaagent-1.0.0-SNAPSHOT.jar="hello world" com.skyler.cobweb.agent.AgentTest
+----
+
+效果
+----
+------ premain方法 有两个入参 ------ agentArgs:hello world inst:sun.instrument.InstrumentationImpl@a09ee92
+ ------ main方法
+----
+
+不加上时
+----
+$ cd /Users/xx/microservice-comb/microservice-comb-javaagent/target/classes
+$ java com.skyler.cobweb.agent.AgentTest
+----
+
+效果
+----
+ ------ main方法
+
+----
+效果还是很明显的，不加-javaagent，jar里的类方法没有执行，也即不会输出信息
+
+这个对比的目的是突出javaagent的作用。并让你清晰的感受javaagent的作用：像代理一样可以在main方法前做些事情，官方的说字节码增强。通过修改字节码的方式，让开发者有机会做些事情，如arthas 和skywalking的建监听组件
+
+千言万语抵不上`run`一个'hello world'
+
+本文想通过最简单、最直观的方式，让你最快速的、最真切的了解javaagent的作用。下篇展开说javaagent的原理和更实际的使用例子

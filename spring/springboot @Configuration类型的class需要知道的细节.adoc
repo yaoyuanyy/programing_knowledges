@@ -1,0 +1,16 @@
+= springboot @Configuration类型的class需要知道的细节
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
