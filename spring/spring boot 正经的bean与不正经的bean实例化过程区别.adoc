@@ -14,3 +14,226 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+== 概述
+从bean的类型上看，spring将bean分成了normal bean和 FactoryBean两种；从bean的声明方式来看也有两种：@Component和@Bean。那么，我们就来看看这几种bean的实例化方式的相同点和不同点。这里我们称normal bean和@Component为正经的bean，因为他们的实例化方式是大众的，而FactoryBean和@Bean是不正经的，因为他们的实例化方式有那么一点小众。正经和不正经我认为没有好坏之分，就像人一样，你喜欢的才是好的。
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191212091057.png[20191212091057.png]
+
+== 你的收获
+通过本文，你能收获什么？
+
+1. normal bean和@Component生成beanDefinition的入口
+2. normal bean和@Component的beanDefinition如何生成bean instance并放入spring容器的
+3. @Bean生成beanDefinition的入口
+4. @Bean的beanDefinition如何生成bean instance并放入spring容器的,这里的instance可能是proxy代理类
+5. FactoryBean生成beanDefinition的入口
+6. FactoryBean的beanDefinition如何生成bean instance并放入spring容器的,这里的instance可能是proxy代理类
+7. 这些不同类型的bean生成bean instance过程的联系和区别
+
+> 本文力求专注和精简，希望你有所收获和想法
+
+== 示例
+如下，我们列举了实际工作中常用的类，不同类型的bean都拿出来一个，便于我们对齐思路
+----
+import com.skyler.project
+// normal bean
+@Service
+public class UserServiceImpl implements IUserService {
+	@Override
+	public int insert(User user) {}
+}
+
+// @Bean方式声明的类
+@Configuration
+public class MapperAutoConfiguration {
+    @Bean
+    public SqlSessionFactory sqlSessionFactory(DataSource dataSource)
+    }
+}
+----
+
+先上图，有图好说话
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191214073018.png[20191214073018.png]
+
+图展示了不同类型的类的.class文件生成beanDefinition的入口，以及通用的beanDefinition生成bean instance或proxy代理类的大框过程和入口
+
+== normal bean和@Component类型的bean
+=== 入口
+如上图
+=== 具体的BeanDefinition
+normal bean和@Component类型的bean生成的BeanDefinition为RootBeanDefinition。此时的关键属性有
+----
+resolvedTargetType=com.skyler.project.UserServiceImpl
+resolvedConstructorOrFactoryMethod=com.skyler.project.UserServiceImpl
+beanClass=com.skyler.project.UserServiceImpl
+autowireMode=0
+attributes
+extenallyManagedConfigMembers=存的是bean的成员属性
+----
+详细参见文章结尾贴出了@Component声明的bean、@Bean声明的bean、FactoryBean类型的bean三者BeanDefinition的对象属性对比图
+
+=== beanDefinition如何生成bean instance
+
+beanDefinition如何生成bean instance的轨迹
+----
+UserServiceImpl:
+AbstractBeanFactory.getBean
+AbstractBeanFactory.doGetBean
+DefaultSingletonBeanRegistry.getSingleton
+AbstractAutowireCapableBeanFactory.createBean
+AbstractAutowireCapableBeanFactory.doCreateBean
+--this.createBeanInstance
+----resolveBeanClass
+----instantiateBean
+AbstractAutowireCapableBeanFactory.populateBean
+--AutowiredAnnotationBeanPostProcessor.postProcessProperties for BeanPostProcessor.postProcessProperties
+----InjectionMetadata.inject
+AbstractAutowireCapableBeanFactory.initializeBean //使用AbstractAdvisor生成proxy代理类
+----
+
+
+== @Bean类型的bean
+=== 入口
+如上图
+=== 具体的BeanDefinition
+此时的BeanDefinition类型为ConfigurationClassBeanDefinition。以`@Bean SqlSessionFactory`为例，此时比较关键的属性有
+----
+factoryMethodMetadata
+autowireMode=3
+factoryBeanName=tk.mybatis.mapper.autoconfigure.MapperAutoConfiguration
+factoryMethodName=sqlSessionFactory
+factoryMethodReturnType
+----
+详细参见文章结尾贴出了@Component声明的bean、@Bean声明的bean、FactoryBean类型的bean三者BeanDefinition的对象属性对比图
+
+=== beanDefinition如何生成bean instance
+beanDefinition如何生成bean instance的轨迹
+----
+AbstractBeanFactory.getBean
+AbstractBeanFactory.doGetBean
+DefaultSingletonBeanRegistry.getSingleton
+AbstractAutowireCapableBeanFactory.createBean
+AbstractAutowireCapableBeanFactory.doCreateBean
+--this.createBeanInstance
+----this.instantiateUsingFactoryMethod
+------ConstructorResolver.instantiateUsingFactoryMethod
+--------ConfigurationClassEnhancer$BeanMethdoInterceptor
+----
+从debug运行轨迹可以更清晰的观察
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191214144005.png[20191214144005.png]
+
+== @Configuration类型的bean
+=== 入口
+如上图
+=== 具体的BeanDefinition
+此时的BeanDefinition类型为ConfigurationClassBeanDefinition。@Configuration类型的bean生成BeanDefinition的过程比较特殊，如下图所示
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191214143554.png[20191214143554.png]
+
+=== beanDefinition如何生成bean instance
+----
+AbstractBeanFactory.getBean
+AbstractBeanFactory.doGetBean
+DefaultSingletonBeanRegistry.getSingleton
+AbstractAutowireCapableBeanFactory.createBean
+AbstractAutowireCapableBeanFactory.doCreateBean
+--AbstractAutowireCapableBeanFactory.autowireConstructor 如果有构造函数 
+----
+从debug运行轨迹可以更清晰的观察。这样我们以MapperAutoConfiguration为例
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191214144157.png[20191214144157.png]
+
+
+== FactoryBean类型的bean
+=== 入口
+上图没有展示FactoryBean的.class文件生成beanDefinition的入口。因为FactoryBean是个特殊的bean。看下它的用法和适用场景。
+FactoryBean首先是一个bean，其次，它是一个factory bean：工厂bean，干什么的？生产bean的啊。怎么生产？通过FactoryBean.getObject()方法生产，这么生产有什么好处？或者说FactoryBean的意义是什么？
+
+FactoryBean生产的产品，不是FactoryBean本身。即FactoryBean返回的对象不是指定类的一个实例，其返回的是该FactoryBean的getObject方法所返回的对象。FactoryBean的特殊之处在于它可以向容器中注册两个Bean，一个是它本身，一个是FactoryBean.getObject()方法返回值所代表的Bean。在Spring框架内部，有很多地方有FactoryBean的实现类，它们在很多应用如(Spring的AOP、ORM、事务管理)
+
+所以，FactoryBean接口是Spring IoC容器实例化逻辑的扩展点。假如初始化代码非常复杂，这种场景中，就可以自定义FactoryBean,在类中撰写复杂的初始化程序，并将其作为插件加入到容器中。spring cloud openFeign和mybatis Mapper都应用了这个技术，上实际工作的代码
+----
+//spring cloud openFeign 声明一个FeignClient
+@FeignClient(value = "${provider.application:skyler-base}", contextId = "SkylerComboFeignService")
+public interface SkylerComboFeignService {
+
+    @PostMapping(value = "api/skyler/combo/create", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResultDTO create(@RequestBody ComboParam param);
+
+    @GetMapping(value = "api/skyler/combo/list")
+    ResultDTO<Page<ComboDTO>> listCombo(Long comboId, Integer currentPage,Integer pageSize);
+}
+
+// mybatis声明一个Mapper，操作数据库，进行curd操作
+@Repository
+public interface ComboMapper {
+    int insert(Combo record);
+
+    List<Combo> selectByExample(ComboExample example);
+}
+----
+这两段代码相信你一定很熟悉，都是开发中常用的。只要我们这样声明了/定义了，我们就可以使用feign就行远程调用了，就可以调用数据库了，这一切的背后都是通过FactoryBean实现的。
+
+所以，openFeign的入口在FeignClientsRegistrar；mybatis Mapper的入口在MapperScannerRegistrar。
+
+=== 具体的BeanDefinition
+此时的BeanDefinition类型为RootBeanDefinition。以`@FeignClient`为例，此时比较关键的属性有
+----
+propertyValues=MutablePropertyValues 
+resolvedTargetType=org.springframework.cloud.openfeign.FeignClientFactoryBean
+resolvedConstructorOrFactoryMethod=org.springframework.cloud.openfeign.FeignClientFactoryBean
+beanClass=org.springframework.cloud.openfeign.FeignClientFactoryBean
+autowireMode=2
+----
+详细参见文章结尾贴出了@Component声明的bean、@Bean声明的bean、FactoryBean类型的bean三者BeanDefinition的对象属性对比图
+
+=== beanDefinition如何生成bean instance
+----
+AbstractBeanFactory.getBean
+AbstractBeanFactory.doGetBean
+AbstractBeanFactory.getObjectForBeanInstance
+FactoryBeanRegistrySupport.getObjectFromFactoryBean
+FactoryBeanRegistrySupport.doGetObjectFromFactoryBean
+object = factory.getObject(); //factory为FactoryBean类型
+----
+== 不同类型BeanDefinition对象属性对比图
+图有点不清晰，后面我找个大屏幕截个图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191214153155.png[20191214153155.png]
+
+== it`s time to summary
+本文意在理清不同类型的bean在生成beanDefinition的入口在哪，为你提供一个梯子。有了这个梯子，你就可以快速定位指定位置，从而更详细的去追踪代码，薄丝细节。要想彻底真正的弄清技术的原理，看文章远远不够，必须你自己亲自动手。所以，本文的目的意在缩短你学习技术原理的路径，节省宝贵的时间做更重要的事情。
+
+
+== 扩展
+我们薄丝去皮后发现，`beanDefinition如何生成bean instance`的过程，我们从源码中可以发现，所有类型bean的实例化最终都会调用getObjectForBeanInstance()方法。在getObjectForBeanInstance()方法中会先判断bean是不是FactoryBean，如果不是，就直接返回Bean。如果是FactoryBean，且name是以&符号开头，那么表示的是获取FactoryBean的原生对象，也会直接返回。如果name不是以&符号开头，那么表示要获取FactoryBean中getObject()方法返回的对象。薄丝去皮后代码如下
+
+----
+AbstractBeanFactory class
+protected <T> T doGetBean(final String name, @Nullable final Class<T> requiredType,
+			@Nullable final Object[] args, boolean typeCheckOnly) throws BeansException {
+	final String beanName = transformedBeanName(name);
+	Object bean;
+
+	Object sharedInstance = getSingleton(beanName);
+	if (sharedInstance != null && args == null) {
+		bean = getObjectForBeanInstance(sharedInstance, name, beanName, null);
+	}
+	else {
+		if (mbd.isSingleton()) {
+			
+			bean = getObjectForBeanInstance(sharedInstance, name, beanName, mbd);
+		}
+		else if (mbd.isPrototype()) {
+			bean = getObjectForBeanInstance(prototypeInstance, name, beanName, mbd);
+		}
+		else {
+			bean = getObjectForBeanInstance(scopedInstance, name, beanName, mbd);
+		}
+		
+	}
+	return (T) bean;
+}
+----
+
+
+一张图relax你的思绪
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191214154439.png[20191214154439.png]

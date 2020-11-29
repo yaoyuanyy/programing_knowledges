@@ -13,3 +13,273 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+== 1. 摘要
+
+本文配图介绍HTTPS协议的层级结构，访问原理，交互过程，说明如何解决存在的中间人问题。
+
+== 2. 内容
+=== 2.1 HTTPS的协议栈层级
+HTTPS（全称：Hyper Text Transfer Protocol over Secure Socket Layer 或 Hypertext Transfer Protocol Secure，超文本传输安全协议），是以安全为目标的HTTP通道，简单讲是HTTP的安全版。即HTTP下加入SSL层，HTTPS的安全基础是SSL，因此加密的详细内容就需要SSL。 它是一个URI scheme（抽象标识符体系），句法类同http:体系。用于安全的HTTP数据传输。https:URL表明它使用了HTTP，但HTTPS存在不同于HTTP的默认端口及一个加密/身份验证层（在HTTP与TCP之间）。
+
+为鼓励全球网站的 HTTPS 实现，一些互联网公司都提出了自己的要求：
+
+- 1）Google 已调整搜索引擎算法，让采用 HTTPS 的网站在搜索中排名更靠前；
+- 2）从 2017 年开始，Chrome 浏览器已把采用 HTTP 协议的网站标记为不安全网站；
+- 3）苹果要求 2017 年 App Store 中的所有应用都必须使用 HTTPS 加密连接；
+- 4）当前国内炒的很火热的微信小程序也要求必须使用 HTTPS 协议；
+- 5）新一代的 HTTP/2 协议的支持需以 HTTPS 为基础。
+
+因此，作为程序员来说，HTTPS知识必须掌握。
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401093919.png[20200401093919.png]
+如上图所示 HTTPS 相比 HTTP 多了一层 SSL/TLS
+
+SSL（Secure Socket Layer，安全套接字层）：1994年为 Netscape 所研发，SSL 协议位于 TCP/IP 协议与各种应用层协议之间，为数据通讯提供安全支持。
+
+TLS（Transport Layer Security，传输层安全）：其前身是 SSL，它最初的几个版本（SSL 1.0、SSL 2.0、SSL 3.0）由网景公司开发，1999年从 3.1 开始被 IETF 标准化并改名，发展至今已经有 TLS 1.0、TLS 1.1、TLS 1.2 三个版本。SSL3.0和TLS1.0由于存在安全漏洞，已经很少被使用到。TLS 1.3 改动会比较大，目前还在草案阶段，目前使用最广泛的是TLS 1.1、TLS 1.2。
+
+=== 2.2 TCP的3次握手和HTTP 访问过程
+==== 2.2.1 TCP的3次握手
+客户端输入URL回车，DNS解析域名得到服务器的IP地址，服务器在80端口监听客户端请求，端口通过TCP/IP协议（可以通过Socket实现）建立连接。HTTP属于TCP/IP模型中的运用层协议，所以通信的过程其实是对应数据的入栈和出栈。
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401093933.png[20200401093933.png]
+
+报文从运用层传送到运输层，运输层通过TCP三次握手和服务器建立连接，四次挥手释放连接。
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401093945.png[20200401093945.png]
+
+分析下这个三次握手的过程：
+----
+ 第一次握手：主机A发送位码为syn＝1,随机产生seq number= X的数据包到服务器，主机B由SYN=1知道，A要求建立联机；
+ 第二次握手：主机B收到请求后要确认联机信息，向A发送syn=1，ack number= X+1 ，随机产生seq=Y的包
+ 第三次握手：主机A收到后检查ack number是否正确，即第一次发送的X+1,以及位码SYN是否为1；若正确，主机A会再发送ack number=(Y+1), Seq = z，主机B收到后确认seq值与ack=1则连接建立成功。
+ 完成三次握手，主机A与主机B开始传送数据。
+----
+==== 2.2.2 HTTP 访问过程
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401093959.png[20200401093959.png]
+
+抓包如下：
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094006.png[20200401094006.png]
+
+如上图所示，HTTP请求过程中，客户端与服务器之间没有任何身份确认的过程，数据全部明文传输，“裸奔”在互联网上，所以很容易遭到黑客的攻击，如下：
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094017.png[20200401094017.png]
+
+
+可以看到，客户端发出的请求很容易被黑客截获，如果此时黑客冒充服务器，则其可返回任意信息给客户端，而不被客户端察觉，所以我们经常会听到一词“劫持”。所以 HTTP 传输面临的风险有：
+----
+ （1） 窃听风险：黑客可以获知通信内容。
+ （2） 篡改风险：黑客可以修改通信内容。
+ （3） 冒充风险：黑客可以冒充他人身份参与通信。
+----
+=== 2.3 安全通信三原则和https的设计思路
+==== 2.3.1 确保安全通信的三个原则
+===== A.数据内容的加密
+ 这个很好理解是吧，敏感信息肯定要加密的，明文传输等于自杀。不过多解释了。
+===== B.通讯双方的身份校验
+ 这个很多人不理解，这是啥意思，按道理说我们用非对称加密应该就完美了啊。但是谨记我们的数据包不是从A直接到B的。
+
+ 中间要经过无数次的路由器转发等等，这个中间一旦有人截获了我们的数据包，换成自己的数据包，就很危险了。
+
+ 所以我们还需要一种机制能校验通讯双方的身份。确保我是在和我老婆说话 而不是在我和丈母娘说话。
+===== C.数据内容的完整性
+ 这个也不是很容易理解，按道理说TCP是能保证数据有序完整的到达对方的。但是不要忘记中间我们经过的无数次路由器转发，
+ 可能被劫持，被劫持以后可能会对数据包进行篡改，这个时候我们需要一种机制保护我们的数据不被篡改，即使被篡改也能被我们察觉，确保我对我老婆写的信能完整的让我老婆看到，而不是只看到一半。
+
+==== 2.3.2 https的设计思路
+根据前面我们阐述的加密算法和安全通信三原则，为了保证我们的通信能够安全进行，可以试想出一种流程来保证通信安全：
+
+- 服务器为每个客户端生成一个公钥，将公钥发送给客户端；
+- 客户端选择一个加密算法，然后用公钥加密以后发送给服务器；
+- 服务器收到这个公钥加密后的算法以后拿自己的私钥解密，然后就知道这个加密算法是哪个了。今后就一直用这个算法通信；
+
+目前来看，这个思路是不是很完美。公钥即使被中间人截获以后也没用，因为拿到公钥也解密不出来到底双方是用哪种算法加密的。
+
+但有个重大缺陷：
+
+中间人可以将服务器发送的公钥包进行掉包，客户端怎么知道这个公钥是真的服务器发送的还是假的中间人给的非法公钥呢？
+
+可以看这张图，基本上中间人攻击就是这个图所示的意思。
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094047.png[20200401094047.png]
+
+那有没有一种方式既可以安全的获取公钥，又能防止黑客冒充呢？ 那就需要用到终极武器了： https://cloud.tencent.com/product/ssl?from=10680[SSL证书申购了]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094057.png[20200401094057.png]
+
+具体步骤说明：
+ 如上图所示，在第 ② 步时服务器发送了一个SSL证书给客户端，SSL 证书中包含的具体内容有：
+ ----
+ （1）证书的发布机构CA
+ （2）证书的有效期
+ （3）公钥
+ （4）证书所有者
+ （5）签名
+ ………
+ ----
+ 客户端在接受到服务端发来的SSL证书时，会对证书的真伪进行校验，以浏览器为例说明如下：
+ ----
+ （1）首先浏览器读取证书中的证书所有者、有效期等信息进行一一校验；
+ （2）浏览器开始查找操作系统中已内置的受信任的证书发布机构CA，与服务器发来的证书中的颁发者CA比对，用于校验证书是否为合法机构颁发；
+ （3）如果找不到，浏览器就会报错，说明服务器发来的证书是不可信任的；
+ （4）如果找到，那么浏览器就会从操作系统中取出 颁发者CA 的公钥，然后对服务器发来的证书里面的签名进行解密；
+ （5）浏览器使用相同的hash算法计算出服务器发来的证书的hash值，将这个计算的hash值与证书中签名做对比；
+ （6）对比结果一致，则证明服务器发来的证书合法，没有被冒充；
+ （7）此时浏览器就可以读取证书中的公钥，用于后续加密了；
+----
+所以通过发送SSL证书的形式，既解决了公钥获取问题，又解决了黑客冒充问题，一箭双雕，HTTPS加密过程也就此形成。
+
+所以相比HTTP，HTTPS 传输更加安全：
+----
+ （1） 所有信息都是加密传播，黑客无法窃听。
+ （2） 具有校验机制，一旦被篡改，通信双方会立刻发现。
+ （3） 配备身份证书，防止身份被冒充。
+----
+==== 2.3.3 加密知识普及
+===== 1、对称加密
+
+ 有流式、分组两种，加密和解密都是使用的同一个密钥。
+ 例如：DES、AES-GCM、ChaCha20-Poly1305等。
+
+【戏说】
+
+对称加密的一方（比如小红）用秘钥 K 给文本 M 加密；另一方（比如小明）用 同一个秘钥解密：
+----
+小红 : C = E(M, K)
+小明 : M = D(C, K)
+----
+这有一个问题：当一方生成了秘钥 K 之后得把 K 分享给另一方。但是穿越 Sin City 的道路危险中途很可能有人窃听到 K，窃听者就可以假扮双方中的任何一 方与另一方通信。这叫中间人攻击。
+
+==== 2、非对称加密
+
+加密使用的密钥和解密使用的密钥是不相同的，分别称为：公钥、私钥，公钥和算法都是公开的，私钥是保密的。非对称加密算法性能较低，但是安全性超强，由于其加密特性，非对称加密算法能加密的数据长度也是有限的。
+例如：RSA、DSA、ECDSA、 DH、ECDHE。
+
+【戏说】
+
+非对称加密利用成对的两个秘钥：K1 和 K2。小红用其中一个加密文本，小明可 以用另一个解密文本。比如，小红用 K1 加密，小明用 K2 解密：
+----
+小红 : C = E(M, K1)
+小明 : M = D(C, K2)
+----
+这样一来，双方中的一方（比如小红）可以生成 K1和K2，然后把其中一个秘钥 （比如K1）私藏，称为私钥；另一个（比如K2）公开，称为公钥。另一 方（比如小明）得到公钥之后，双方就可以通信。
+
+然而，中间人可能在小明获取公钥时截获消息，然后自己弄一对秘钥（κ1, κ2），然后 告诉小明说 κ2 是小红的公钥。这样中间人每次可以用截获的 K2 解密小红发给 小明的文本（甚至可能修改文本），再用 κ1 加密了发出去；小明用 κ2 解密接收。
+
+==== 3、哈希算法
+将任意长度的信息转换为较短的固定长度的值，通常其长度要比信息小得多，且算法不可逆。
+例如：MD5、SHA-1、SHA-2、SHA-256 等。
+
+==== 4、数字签名
+数字签名技术是将摘要信息用发送者的私钥加密，与原文一起传送给接收者。接收者只有用发送者的公钥才能解密被加密的摘要信息，然后用HASH函数对收到的原文产生一个摘要信息，与解密的摘要信息对比。如果相同，则说明收到的信息是完整的，在传输过程中没有被修改，否则说明信息被修改过，因此数字签名能够验证信息的完整性。
+
+数字签名是个加密的过程，数字签名验证是个解密的过程。
+
+普通数字签名算法有RSA、ElGamal、Fiat-Shamir、Guillou- Quisquarter、Schnorr、Ong-Schnorr-Shamir数字签名算法、Des/DSA,椭圆曲线数字签名算法和有限自动机数字签名算法等。
+
+HTTPS使用CA证书的传输方式就是使用了数字签名，非对称加密，对称加密等混合加密技术。
+
+数字签名的做法是：
+
+- 小红把自己的公钥和ID（身份证号码，或者域名）合为身份证申请（certificate signing request，CSR），小红把CSR发给一个德高望重的人（被称为 certificate authority，CA），比如小亮。
+- 小亮用自己的私钥加密小红的 CSR，得到的密文被称为数字签名（digital signature）。
+- 小亮把 signature 和 CSR 的明文合在一起称为 CA签署的身份证（CA signed certificate，CRT），发给小红。
+----
+小红：CSR = 小红公钥+小红域名
+     signature = E(CSR, 小亮的私钥)
+     CRT = CSR + signature
+----
+每当其他人（比如小明）找小红聊天（建立HTTPS连接）的时候，小红出示自己的小亮签署的身份证。 拿到这个身份证的人，只要他是相信小亮的——在自己机器上安装了小亮的身份证，就可以从小亮的身份证中的小亮的CSR里提取小亮的公钥；
+
+然后用小亮的公钥解密小红的身份证中小亮的signature，得到一个小红的CSR；
+
+如果这个CSR'和小红身份证中的CSR明文一致，则说明“这个小红的身份证是小亮确认过并且签名的”。
+----
+小明：小亮的公钥 = 小亮的CRT.CSR.小亮的公钥
+     CSR' = D(CRT.signature, 小亮的公钥)
+     if CSR' == CRT.CSR then OK
+----
+=== 2.4 HTTPS真实交互消息过程
+==== 2.4.1 HTTPS交互消息
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094308.png[20200401094308.png]
+
+说明：
+
+（1）看蓝色的部分是tcp链接。所以https的加密层也是在tcp之上的。
+
+（2）客户端首先发起clientHello消息。包含一个客户端随机生成的random1 数字，客户端支持的加密算法，以及SSL信息。
+
+（3）服务器收到客户端的clientHello消息以后，取出客户端法发来的random1数字，并且取出客户端发来的支持的加密算法，
+ 然后选出一个加密算法，并生成一个随机数random2，发送给客户端serverhello让客户端对服务器进行身份校验,服务端通过将自己的公钥通过数字证书的方式发送给客户端。
+
+（4）客户端收到服务端传来的证书后，先从 CA 验证该证书的合法性，验证通过后取出证书中的服务端公钥，再生成一个随机数 Random3，再用服务端公钥非对称加密 Random3 生成 PreMaster Key。并将PreMaster Key发送到服务端。
+
+（5）服务端通过私钥将PreMaster Key解密获取到Random3,此时客户端和服务器都持有三个随机数Random1 Random2 Random3,双方在通过这三个随即书生成一个对称加密的密钥.双方根据这三个随即数经过相同的算法生成一个密钥,而以后应用层传输的数据都使用这套密钥进行加密。
+ Change Cipher Spec Finished:告诉客户端以后的通讯都使用这一套密钥来进行。
+
+（6）最后ApplicationData 全部使用对称加密的原因就是非对称加密太卡，对称加密不影响性能。所以实际上也看的出来，HTTPS的真正目的就是保证对称加密的 密钥不被破解，不被替换，不被中间人攻击，如果发生了上述情况，那么HTTPS的加密层也能获知，避免发生事故。
+
+==== 2.4.2 用WireShark还原一次HTTPS的交互过程
+目标访问地址就用github吧。 抓出来是这样的。
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094338.png[20200401094338.png]
+
+注意看tlsv1的就可以了这个就是加密层。下面就来逐步分析：
+ (1) ClientHello (line-2330)
+image::(https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094348.png[fff]
+
+（2）severHello (line-2380)
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094402.png[20200401094402.png]
+
+注意到这里服务器和客户端就有2个随机数了。并且加密算法也确定了。
+
+（3）Certificate / severHelloDone(line 2435)
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094413.png[20200401094413.png]
+
+这部分主要是发送证书信息的 点开以后 证书的详细信息都能看到。另外serverhellodone的意思就是服务器的工作都完毕了。
+
+
+（4）Client key exchange / ChangeCipherSpec (line-2449)
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094425.png[20200401094425.png]
+
+可以看出来这里一共有三个步骤，我们来依次分析 这三次动作都做了什么:
+
+Client Key Exchange
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094438.png[20200401094438.png]
+
+服务器收到这个random3的加密信息以后，用自己的私钥解密，这样服务器和客户端就共同拥有了random 1，2，3这3组随机数，然后用这三组数据生成一个密钥，这个密钥就是后面我们applicationdata交互时使用的对称加密的密钥了。
+
+ChangeCipherSpec
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094506.png[20200401094506.png]
+
+（5）Change Cipher Spec Finished /new session ticket(line 2926)
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094526.png[20200401094526.png]
+
+解释参考图片描述。
+
+这个session ticket就是服务器最后一步的时候传给客户端的一个数据。
+ 
+这个加密数据客户端收到以后就可以保存下来，这样下一次再请求https的时候，就可以把这个session ticket发过去，这样可以省很多握手的时间和资源消耗。（前面我们分析的其实已经相当复杂了，尤其是非对称加密对服务端的资源消耗相当之大）,实际上对于多数浏览器来说，指向同一个域名的https连接，我们都会有意识的让第一个https连接完成握手之后再连接第n个 https。因为这样后续的https 就可以携带相关信息，可以省很多资源这个ticket实际上就有点类似cookie。
+
+在笔者的这次访问chrome-gitub的过程中，浏览器并没有使用ticket技术而是使用的seession id技术：
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094538.png[20200401094538.png]
+
+sessionid 实际上作用和ticket差不多，但是sessionid 无法做到服务器之间同步，毕竟id 存在服务器内存中， https://cloud.tencent.com/product/clb?from=10680[负载均衡]带来的状态机同步是一个大问题。
+
+（6）Application Data (line-2964)
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094551.png[20200401094551.png]
+
+
+=== 2.5 CA证书是收费的啊，我不想交钱咋办呢?
+可以自己制作证书，然后把这个证书的公钥放在客户端（例如app的安装目录下），这样app只要使用自己的证书公钥即可解密了，不需要使用系统的。但是这样带来的问题是，如果有人获取到了你这个公钥证书咋办？
+ 数字签名认证算法即可保证此类问题，其实简单来说就是服务器和客户端事先约定好一种加密规则即可，就可以得知是否被篡改。
+ 这部分由于不是重点，暂时不讲的太细，只要知道有这么个事即可。实际上你弄懂整个https以后这个地方就自然而然也能想明白了。
+
+参考[《蚂蚁区块链第9课 SSL/TLS工作原理及在蚂蚁BAAS中的应用》](https://www.jianshu.com/p/b7f839182a1e)可了解SSL/TLS的原理和在蚂蚁区块链的应用。
+
+== 3.参考
+（1） https://blog.csdn.net/xiaoming100001/article/details/81109617[HTTP和HTTPS协议，看一篇就够了]
+
+（2） (https://juejin.im/post/5a2fbe1b51882507ae25f991[深入理解HTTPS协议【优质】]
+
+（3） https://zhuanlan.zhihu.com/p/27395037[HTTPS系列干货（一）：HTTPS 原理详解]
+
+（4） https://www.jianshu.com/p/083f992d0ee3[HTTP协议入门教程，一文就够了！]
+
+原文链接： https://cloud.tencent.com/developer/article/1425339[HTTPS协议原理和流程分析]

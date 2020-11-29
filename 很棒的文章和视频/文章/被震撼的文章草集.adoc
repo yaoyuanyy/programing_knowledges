@@ -1,0 +1,43 @@
+= 被震撼的文章草集
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+
+## 引言
+
+技术飞速发展，学习的脚步也要不断添加风火轮。一门技术囊括了很多内容和细节，你可能只掌握了其中的一部分，但是有很多高手他们看的比较深邃，往往当你看到他们的文章时，给你带来的是天窗的打开。
+
+这里记录下这样的文章，可以随时回来温习
+
+## 技术类
+
+### spring 
+
+[高并发限流那些事](https://www.qianshan.tech/%E6%9E%B6%E6%9E%84/%E9%AB%98%E5%B9%B6%E5%8F%91/%E9%AB%98%E5%B9%B6%E5%8F%91%E9%99%90%E6%B5%81%E9%82%A3%E4%BA%9B%E4%BA%8B.html?hmsr=toutiao.io&utm_medium=toutiao.io&utm_source=toutiao.io)
+
+[如何在 Spring 异步调用中传递上下文](http://blueskykong.com/2019/08/01/spring-async/?hmsr=toutiao.io&utm_medium=toutiao.io&utm_source=toutiao.io)
+
+
+
+### java
+[为什么说Java中只有值传递](https://www.hollischuang.com/archives/2275)
+[本地备份]()http://note.youdao.com/noteshare?id=1060be76aab8c3cd118fdadd5bb184a3
+
+
+## 非技术类
+
+### 能力提升
+[架构师成长之路：如何提升技术掌控力](https://developer.aliyun.com/article/745651?spm=5176.8961142.detail.10.791c4d71iDOvFG)

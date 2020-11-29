@@ -14,3 +14,285 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+> 实际工作中学习技术是最快、最深刻的。当然，自身的持续学习意识是必须的
+
+== 技术栈版本：
+- spring boot 2.0.2
+
+== 遇到事儿了
+近来做业务需求，前端同学fe将`userId`和`userName`放到`request header`中了。后端api接口要想使用`userId`和`userName`，每个接口都要从`header`中获取。试想一下，如果你有十个接口，那么每个接口都要写一遍`Object.setUserId(request.getHeader("userId"))`。正如下面代码段
+----
+@RestController
+@Validated
+@RequestMapping("/template")
+public class TemplateController {
+
+    // 一个feign client
+    @Autowired 
+    TemplateClient templateClient
+
+    @PostMapping(value = "/create", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResultVO create(@RequestBody @Valid TemplateParam param, HttpServletRequest request) {
+        // 每个接口都要写一遍setXXX()方法
+        param.setUserId(request.getHeader("userId"));
+        param.setUserName(request.getHeader("userName"));
+
+        return templateClient.createTemplate(param).toResultVO();
+    }
+}   
+@Data
+public class TemplateParam{
+    private Long templateId; 
+    private Long userId;
+    private String userName;
+}
+----
+
+== 解决办法
+大家都知道的两大利器，
+> tomcat的Filter和spring的Intercepter(具体为HandlerIntercepter)
+
+== 实现原理
+
+具体方法为定义一个Filter实现类和一个HandlerIntercepter的实现类。再定义一个HttpServletRequest实现类，其作用分别为
+
+=== Filter实现类：UserInfoFilter
+
+创建一个入口，在这个入口中定义一个机会：将我们自定义的CustomHttpServletRequestWrapper代替HttpServletRequest随着请求传递下去
+
+=== HttpServletRequest实现类：customHttpServletRequestWrapper
+
+因为HttpServletRequest对象的body数据只能get，不能set，即不能再次赋值。而我们的需求是需要给HttpServletRequest赋值，所以需要定义一个HttpServletRequest实现类：customHttpServletRequestWrapper，这个实现类可以被赋值来满足我们的需求。
+
+=== HandlerIntercepter的实现类：CustomInterceptor
+
+拦截请求，获取接口方法相关信息(方法名，参数，返回值等)。从而实现统一的给request body动态赋值
+
+实现思路如上所述，具体的实现代码如下
+
+=== 代码实现
+
+==== 声明基础bean: UserInfoParam
+UserInfoParam：定义了包含userId,userName的实体bean,要想将用户信息注入进入，需要入参对象XXXParam继承UserInfoParam，拦截器中只处理@Requestbody中实现了UserInfoParam类的bean。如上文controller中create方法的入参：TemplateParam，继承UserInfoParam
+----
+@Data
+public class TemplateParam extends UserInfoParam{
+    private Long templateId; 
+    // private Long userId;
+    // private String userName;
+}
+----
+
+@Data
+public class UserInfoParam {
+
+    // 用户id
+    private Long userId;
+
+    // 用户名称
+    private String userName;
+}
+
+==== 定义Filter实现类: UserInfoFilter
+
+----
+@Slf4j
+public class UserInfoFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+        CustomHttpServletRequestWrapper customHttpServletRequestWrapper = null;
+        try {
+            HttpServletRequest req = (HttpServletRequest)request;
+            customHttpServletRequestWrapper = new CustomHttpServletRequestWrapper(req);
+        }catch (Exception e){
+            log.warn("customHttpServletRequestWrapper Error:", e);
+        }
+
+        chain.doFilter((Objects.isNull(customHttpServletRequestWrapper) ? request : customHttpServletRequestWrapper), response);
+    }
+}
+----
+
+==== HttpServletRequest实现类：CustomHttpServletRequestWrapper
+
+----
+public class CustomHttpServletRequestWrapper extends HttpServletRequestWrapper {
+
+    // 保存request body的数据
+    private String body;
+
+    // 解析request的inputStream(即body)数据，转成字符串
+    public CustomHttpServletRequestWrapper(HttpServletRequest request) {
+        super(request);
+        StringBuilder stringBuilder = new StringBuilder();
+        BufferedReader bufferedReader = null;
+        InputStream inputStream = null;
+        try {
+            inputStream = request.getInputStream();
+            if (inputStream != null) {
+                bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+                char[] charBuffer = new char[128];
+                int bytesRead = -1;
+                while ((bytesRead = bufferedReader.read(charBuffer)) > 0) {
+                    stringBuilder.append(charBuffer, 0, bytesRead);
+                }
+            } else {
+                stringBuilder.append("");
+            }
+        } catch (IOException ex) {
+
+        } finally {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (bufferedReader != null) {
+                try {
+                    bufferedReader.close();
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        body = stringBuilder.toString();
+    }
+
+    @Override
+    public ServletInputStream getInputStream() throws IOException {
+        final ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(body.getBytes());
+        ServletInputStream servletInputStream = new ServletInputStream() {
+            @Override
+            public boolean isFinished() {
+                return false;
+            }
+            @Override
+            public boolean isReady() {
+                return false;
+            }
+            @Override
+            public void setReadListener(ReadListener readListener) {
+            }
+            @Override
+            public int read() throws IOException {
+                return byteArrayInputStream.read();
+            }
+        };
+        return servletInputStream;
+
+    }
+
+    @Override
+    public BufferedReader getReader() throws IOException {
+        return new BufferedReader(new InputStreamReader(this.getInputStream()));
+    }
+
+    public String getBody() {
+        return this.body;
+    }
+
+    // 赋值给body字段
+    public void setBody(String body) {
+        this.body = body;
+    }
+
+}
+----
+
+==== HandlerIntercepter的实现类：CustomInterceptor
+----
+@Slf4j
+public class CustomInterceptor implements HandlerInterceptor {
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
+        throws Exception {
+        if (!(handler instanceof HandlerMethod)) {
+            return true;
+        }
+        HandlerMethod handlerMethod = (HandlerMethod)handler;
+        pushUserInfo2Body(request, handlerMethod);
+
+        return true;
+    }
+
+    private void pushUserInfo2Body(HttpServletRequest request, HandlerMethod handlerMethod) {
+        try{
+            String userId = request.getHeader("userId");
+            String userName = request.getHeader("userName");
+
+            MethodParameter[] methodParameters = handlerMethod.getMethodParameters();
+            if(ArrayUtils.isEmpty(methodParameters)) {
+                return;
+            }
+            for (MethodParameter methodParameter : methodParameters) {
+                Class clazz = methodParameter.getParameterType();
+                if(ClassUtils.isAssignable(UserInfoParam.class, clazz)){
+                    if(request instanceof CustomHttpServletRequestWrapper){
+                        CustomHttpServletRequestWrapper requestWrapper = (CustomHttpServletRequestWrapper)request;
+                        String body = requestWrapper.getBody();
+                        JSONObject param = JSONObject.parseObject(body);
+                        param.put("userId", userId);
+                        param.put("userName", Objects.isNull(userName) ? null : URLDecoder.decode(userName, "UTF-8"));
+                        requestWrapper.setBody(JSON.toJSONString(param));
+                    }
+                }
+            }
+        }catch (Exception e){
+            log.warn("fill userInfo to request body Error ", e);
+        }
+    }
+----
+
+==== 定义Configuration class，增加拦截器和过滤器的配置
+
+WebMvcConfigurer子类：CustomWebMvcConfigurer
+----
+@Configuration
+public class CustomWebMvcConfigurer implements WebMvcConfigurer {
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        CustomInterceptor customInterceptor= new CustomInterceptor();
+        registry.addInterceptor(customInterceptor);
+    }
+
+    @Bean
+    public FilterRegistrationBean servletRegistrationBean() {
+        UserInfoFilter userInfoFilter = new UserInfoFilter();
+        FilterRegistrationBean<UserInfoFilter> bean = new FilterRegistrationBean<>();
+        bean.setFilter(userInfoFilter);
+        bean.setName("userInfoFilter");
+        bean.addUrlPatterns("/*");
+        bean.setOrder(Ordered.LOWEST_PRECEDENCE);
+
+        return bean;
+    }
+}
+----
+到此，实现功能的代码撸完了。启动spring boot App，就可以curl访问restful接口了
+
+== http访问
+----
+curl -X POST \
+  http://localhost:8080/template/create
+  -H 'Content-Type: application/json'
+  -H 'username: tiankong天空'
+  -H 'userId: 11'
+  -d '{
+  "templateId": 1000}
+----
+
+== 效果
+可以看到TemplateController.create(...)打出的信息，userId和username的值正是header中传的值
+
+
+
+== toDo
+
+剩下的就看你的了

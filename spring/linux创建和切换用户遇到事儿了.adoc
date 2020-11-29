@@ -13,3 +13,224 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+使用版本: CentOS 7
+----
+[root@azfdbdfsdf230lqdg1ba91 ~]# cat /etc/redhat-release
+CentOS Linux release 7.4.1708 (Core)
+[root@azfdbdfsdf230lqdg1ba91 ~]# uname -a
+Linux azfdbdfsdf230lqdg1ba91 3.10.0-693.2.2.el7.x86_64 #1 SMP Tue Sep 12 22:26:13 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux
+[root@azfdbdfsdf230lqdg1ba91 ~]#
+----
+
+== 遇到事儿了
+
+最近在测试环境部署新项目，QA过来说jenkins打包报错。于是去打包机上看打包情况，QA使用的是新账号打包的，也就是说原来其他账号的打包目录他没有权限，所以报错。这是需要给这个账号赋予目录权限。才发现切换账号和赋权限有很多细节，于是操作一番记录下来
+
+  为了方便，先创建了两个用户skyler4，skyler5。以下命令在root账户下执行
+----
+$ groupadd skyler //创建一个组，名称为skyler
+$ cat /etc/group //查看组信息
+$ useradd -g skyler -p skyler4 skyler4 //创建一个用户，名称为skyler4，并关联上组，同时设置密码为skyler4
+$ useradd -g skyler -p skyler5 skyler5 //创建一个用户，名称为skyler5，并关联上组，同时设置密码为skyler5
+$ cat /etc/passwd // 查看所有用户密码
+----
+创建用户后，执行`cat /etc/shadow`可以看到效果如下
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203233.png[20200322203233.png]
+
+于是，我从root切换到skyler4,结果如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203424.png[20200322203424.png]
+
+可以看到，现在已经在skyler4账号下了。我再次切换，这次想切换到skyler5账号下
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203434.png[20200322203434.png]
+可以看到，提示我授权失败，原因是啥的？我输入的skyler5的密码是对的啊，为啥不能切换呢。于是我切换回root账号并执行`passwd skyler5`，输入密码skyler5后，再次使用`cat /etc/shadow`查看
+----
+[skyler4@azfdbdfsdf230lqdg1ba91 ~]$ su -
+Password:
+Last login: Wed Sep 18 20:12:20 CST 2019 on pts/0
+[root@azfdbdfsdf230lqdg1ba91 ~]# passwd skyler5
+Changing password for user skyler5.
+New password:
+BAD PASSWORD: The password contains the user name in some form
+Retype new password:
+passwd: all authentication tokens updated successfully.
+[root@azfdbdfsdf230lqdg1ba91 ~]# cat /etc/shadow
+root:mJw/b3Nd.:17634:0:99999:7:::
+...
+skyler3:skyler3:18157:0:99999:7:::
+skyler4:skyler4:18157:0:99999:7:::
+skyler5:$64jZARp6ewjTNXzVUpOq3xpX9M2zERCaa7Mc6/r61Kr41Yg0qK/:18157:0:99999:7:::
+[root@azfdbdfsdf230lqdg1ba91 ~]#
+----
+可以看到，两次`cat /etc/shadow`查看skyler5账号的密码是不同的，虽然我输入的都是skyler5，但是后一次是加密的。现在我切换到skyler4，再使用`su - skyler5`并输入密码skyler5,以切换到skyler5账号。效果见下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203453.png[20200322203453.png]
+
+可以看到这次切换成功了。不禁问起，1.`useradd`设置的密码不好使吗，2.`passwd`命令又做了什么呢
+=== 原因
+----
+在root权限下，useradd只是创建了一个用户名，如 （useradd 用户名 ），它并没有在/home目录下创建同名文件夹，也没有创建密码，因此利用这个用户登录系统，是登录不了的。这是网上的说法，但我觉得不是这个原因，因为useradd创建的用户是有家目录的，通过root账号下执行 cat /etc/passwd可以看到是有家目录的
+[root@azfdbdfsdf230lqdg1ba91 ~]# useradd -p skyler80 skyler80
+[root@azfdbdfsdf230lqdg1ba91 ~]# cat /etc/passwd
+skyler4:x:1003:1000::/home/skyler4:/bin/bash
+skyler5:x:1004:1000::/home/skyler5:/bin/bash
+skyler80:x:1010:1010::/home/skyler80:/bin/bash
+----
+=== 解决
+1. 在root权限下执行`passwd 用户名`。如`passwd skyler5`，并按照提示输入密码 
+
+另 网上有说使用`useradd -m 用户名`，尝试后发现不起作用。还有说使用adduser这个命令，同样不起作用
+
+
+skyler5可以切换用户了，但是skyler4还不可以，需要给skyler4执行 `passwd skyler4`来设置密码，我们直接在skyler5账户下操作，结果如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203518.png[20200322203518.png]
+
+第一个结果提示sudo命令只能root账号下使用，第二个结果提示skyler5不在sudoers文件中。所以，需要在sudoers中配置skyler5信息，步骤如下
+
+----
+[root@azfdbdfsdf230lqdg1ba91 ~]# ll /etc/sudoers
+-r--r----- 1 root root 3962 9月  19 13:09 /etc/sudoers
+[root@azfdbdfsdf230lqdg1ba91 ~]# chmod u+w /etc/sudoers //赋值这个文件写权限
+[root@azfdbdfsdf230lqdg1ba91 ~]# ll /etc/sudoers
+-rw-r----- 1 root root 3962 9月  19 13:09 /etc/sudoers
+[root@azfdbdfsdf230lqdg1ba91 ~]# visudo // 编辑/etc/sudoers文件
+----
+输入`skyler*`的内容后 按下Esc，然后Shift + double z ，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203532.png[20200322203532.png]
+
+现在我们再来在skyler5账号下设置skyler4的密码，可以发现可以设置了，效果如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203603.png[20200322203603.png]
+
+== adduser与useradd的区别
+网上说adduser和useradd是不同的，但是在CentOS 7上通过info/man adduser/useradd，他俩是相同的
+
+
+
+=== su含义
+----
+su为switch user，即切换用户的简写
+格式：su -l USERNAME(-l为login，即登陆的简写)。-l可以将l省略掉，所以此命令常写为su - USERNAME
+如果不指定USERNAME（用户名），默认即为root，所以切换到root的身份的命令即为：su -root或是直接 su -
+----
+
+== su与su -的区别
+----
+通过su切换用户还可以直接使用命令su USERNAME，与su - USERNAME的不同之处如下：
+   su - USERNAME切换用户后，同时切换到新用户的工作环境中
+   su USERNAME切换用户后，不改变原用户的工作目录，及其他环境变量目录
+如下图，显示两个命令的执行结果：家目录显然不同
+----
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203618.png[20200322203618.png]
+
+你可能会觉得使用 su - 登录更有意义。但是， su 命令也是有用的，那么大家可能会想知道它在什么时候用到。以下内容摘自 ArchLinux wiki 网站 - 关于 su 命令的好处和坏处：
+
+- 有的时候，对于系统管理员（root）来讲，使用其他普通用户的 Shell 账户而不是自己的 root Shell 账户更会好一些。尤其是在处理用户问题时，最有效的方法就是是：登录目标用户以便重现以及调试问题。
+- 然而，在多数情况下，当从普通用户切换到 root 用户进行操作时，如果还使用普通用户的环境变量的话，那是不可取甚至是危险的操作。因为是在无意间切换使用普通用户的环境，所以当使用 root 用户进行程序安装或系统更改时，会产生与正常使用 root 用户进行操作时不相符的结果。例如，以普通用户安装程序会给普通用户意外损坏系统或获取对某些数据的未授权访问的能力。
+
+
+
+== sudo  
+sudo为'superuser do'
+
+----
+使用su切换用户时需知晓要切换用户的登陆密码，即若切换成root用户身份，需知道root用户的登陆密码。作为root用户管理员，如何授权其他普通用户，在不需要知晓root密码的情况下，执行root权限的命令操作？此时即可使用sudo。
+
+sudo是一种权限管理机制，依赖于/etc/sudoers，其定义了授权给哪个用户可以以管理员的身份能够执行什么样的管理命令；
+
+格式：sudo -u USERNAME COMMAND
+
+当普通用户通过sudo以root用户执行命令时，sudo后面的 -u USERNAME可省略，即sudo COMMAND 即意为sudo以root用户执行
+
+默认情况下，系统只有root用户可以执行sudo命令。需要root用户通过使用visudo命令编辑sudo的配置文件/etc/sudoers，才可以授权其他普通用户执行sudo命令。如下图
+----
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203642.png[20200322203642.png]
+
+
+== sudo与su的区别
+- 相同点
+两个命令都可以切换用户：
+sudo -u USERNAME COMMAND； 
+su - USERNAME
+
+
+- sudo与su的区别
+----
+1. 两个命令的最大区别是：切换到root用户时
+sudo COMMAND // 以root权限执行COMMAND，此时需要输入当前账号的密码
+su -         // 切换到root用户，此时需要输入root账户的密码
+
+如：
+skyler5账号下执行 `sudo passwd skyler4`，此时需要你输入skyler5的密码
+skyler5账号下执行 `su -' ，此时需要你输入root的密码
+
+2. 日志记录
+尽管 sudo 命令是以目标用户（默认情况下是 root 用户）的身份执行命令，但是它们会使用 sudoer 所配置的用户名来记录是谁执行命令。而 su 命令是无法直接跟踪记录用户切换到 root 用户之后执行了什么操作。
+
+3. 灵活性
+sudo 命令比 su 命令灵活很多，因为你甚至可以限制 sudo 用户可以访问哪些命令。换句话说，用户通过 sudo 命令只能访问他们工作需要的命令。而 su 命令让用户有权限做任何事情
+
+4. man文档中su和sudo的解释：
+su - run a shell with substitute user andgroup IDs
+sudo - excute a command as another user. sudo allows a permitted user to execute acommand as the superuser or another user, as specified by security policy.
+----
+
+
+== sudo bash与sudo su与sudo sh的区别
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203656.png[20200322203656.png]
+
+1. sudo sh
+----
+----
+
+2. sudo bash
+bash命令是sh命令的扩展和升级
+----
+sudo allows users to run programs with the security privileges of another user (normally the superuser, or root).
+bash starts a new bash shell.
+So, sudo bash starts a new bash shell with the security privilege of root user.
+
+If sudo bash is allowed to any user, that user is root simply by virtue of knowing his own password.
+----
+
+
+3. sudo su 
+切换到root用户
+----
+用户必须有/usr/bin/su命令的sudo权限。一旦切换成功，用户可以以root身份执行任何命令。
+----
+新用户执行sudo su时，可能会提示
+----
+[skyler5@azfdbdfsdf230lqdg1ba91 ~]$ sudo su
+[sudo] password for skyler5:
+Sorry, user skyler5 is not allowed to execute '/bin/su' as root on azfdbdfsdf230lqdg1ba91.
+
+这是因为skyler5没有sudo su的权限，需要在/etc/sudoers文件中配置，具体如下
+切换到root账号
+[skyler5@azfdbdfsdf230lqdg1ba91 ~]$ su -
+赋给root账号对/etc/sudoers文件的写权限
+[root@azfdbdfsdf230lqdg1ba91 ~]# chmod u+w /etc/sudoers
+[root@azfdbdfsdf230lqdg1ba91 ~]# ll /etc/sudoers
+-rw-r----- 1 root root 4210 Sep 19 18:45 /etc/sudoers
+编辑/etc/sudoers，添加内容如下图
+[root@azfdbdfsdf230lqdg1ba91 ~]# visudo
+
+----
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200322203712.png[20200322203712.png]
+编辑好后保存退出，切换到skyler5账号，然后再次执行`sudo su -`
+----
+[skyler5@azfdbdfsdf230lqdg1ba91 ~]$ sudo su - //执行这行你会发现：直接切换都没有root账号，没有输入root账号密码直接切换了
+Last login: Sat Sep 21 16:44:41 CST 2019 on pts/0
+----
+对比`sudo su -` 和`su -`的效果。你会发现前者不需要输入root密码，后者需要输入root密码。这就是sudo命令的好处和'坏处'。<font color=green>特别指出：`sudo su -`是一段时间内不需要输入密码，超过时间同样需要输入密码，但这个密码是skyler5账号的密码，非root的密码</font>
+----
+[skyler5@azfdbdfsdf230lqdg1ba91 ~]$ su -
+Password:
+[root@azfdbdfsdf230lqdg1ba91 ~]# 
+----
+同理，skyler5账号需要执行`sudo bash`、`sudo sh`都需要root先赋给权限，设置方式同`sudo su`的方式
+
+=== sudo bash与sudo su与sudo sh的区别
+从账号切换效果来看
+`sudo su -` = `sudo bash` = `sudo sh`，都是切换到root账号的环境下
+
+参考：http://cn.linux.vbird.org/linux_basic/0410accountmanager_4.php

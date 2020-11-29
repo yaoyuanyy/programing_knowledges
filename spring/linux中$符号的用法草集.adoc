@@ -14,3 +14,195 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+linux使用版本: CentOS 7
+----
+[root@azfdbdfsdf230lqdg1ba91 ~]# cat /etc/redhat-release
+CentOS Linux release 7.4.1708 (Core)
+[root@azfdbdfsdf230lqdg1ba91 ~]# uname -a
+Linux azfdbdfsdf230lqdg1ba91 3.10.0-693.2.2.el7.x86_64 #1 SMP Tue Sep 12 22:26:13 UTC 2017 x86_64 x86_64 x86_64 GNU/Linux
+[root@azfdbdfsdf230lqdg1ba91 ~]#
+----
+
+== $符号草集
+
+> $符号在linux系统的有着很多很重要的作用，特别是在编写bash脚本的时候，随处可见$的身影。由于他的千变万化，多种多样，使对他的掌握和使用，尤其是记忆带来了挑战，所以，现在，我们来一起将它的用法做一次汇总，形成草集。掌握他们不会让你工资大涨，因为面试不会问到，但是会提高你的工作效率，扩展你的视野
+
+目前，我所知道的$用法有$、"$"、$0 $1 $n、$#、$@ $*、$?、$()、${}、${#}、$[]、$-、$!、$$。额外!$，!!，依次详说
+
+=== `$` 获取变量值
+`$`可获取变量的值
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# a=1
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $a
+1
+----
+
+=== `"$"` 获取变量值时最好使用"括起来
+为什么有这个建议呢，看实例
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# echo get value of a = $a
+get value of a = 1
+[root@izbp10lqlgy2g31s41bt94z ~]# echo "get value of a = $a"
+get value of a = 1
+----
+可以看到，有无`"`双引号括起来似乎效果是一样的。别早下结论，往下看
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# a="i am skyler"
+[root@izbp10lqlgy2g31s41bt94z ~]# [ $a == "i am skyler" ]
+-bash: [: 参数太多
+----
+这里解析下`[]`，`[]`是条件判断符号，相当于`test`命令。他的意思是判断a变量的值是否等于`"i am skyler"`。
+那么为什么会报错呢，因为`[ $a == "i am skyler" `]这种写法变量解析后成为`[ i am skyler == "i am skyler" ]`，很明显，这个判断式无法判断等号两边的字符串，我们想要的是`[ "i am skyler" == "i am skyler" ]`的比较。所以平时我们在是$获取变量值时，保持一个好习惯：用双引号括起来，如"$name"
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# [ "$a" == "i am skyler" ]
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $?
+0
+----
+使用双引号后就可以了，这里提前用了下`$?`，他的意思是判断前一个命令执行结果是否正确。输出的结果中，0表示执行成功，非零值表示出错
+
+=== `${}`用于区分变量的边界，明确告诉程序要取哪个变量的值
+如下实例，不加{}程序无法判断$a $ab $abc哪个是变量，无法解析
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# echo "get value of a = $abc"
+get value of a =
+[root@izbp10lqlgy2g31s41bt94z ~]# echo "get value of a = ${a}bc"
+get value of a = 1bc
+[root@izbp10lqlgy2g31s41bt94z ~]#
+----
+=== `${#}`获取变量值的长度
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# echo "get length  of a = ${#a}"
+get length  of a = 1
+[root@izbp10lqlgy2g31s41bt94z ~]# a=11111
+[root@izbp10lqlgy2g31s41bt94z ~]# echo "get length  of a = ${#a}"
+get length  of a = 5
+[root@izbp10lqlgy2g31s41bt94z ~]# a=skyler
+[root@izbp10lqlgy2g31s41bt94z ~]# echo "get length  of a = ${#a}"
+get length  of a = 6
+[root@izbp10lqlgy2g31s41bt94z ~]#
+----
+
+=== `$0 $1 $n` 获取文件名称和参数值，一般在bash脚本中较多
+`$0` 表示shell脚本文件名；从1开始表示第几个参数，1表示第一个参数。这里我们创建一个test.sh可执行文件
+----
+创建一个test.sh文件并填充代码
+[root@izbp10lqlgy2g31s41bt94z ~]# echo 'echo $0 $1 $2' > test.sh
+[root@izbp10lqlgy2g31s41bt94z ~]# cat test.sh
+echo $0 $1 $2
+
+执行test.sh 并传入变量
+[root@izbp10lqlgy2g31s41bt94z ~]# sh test.sh i am skyler
+test.sh i am
+----
+可以看到，三个参数中前两个打印出来了，因为我们没有声明$3，所有打印出了文件名称和前两个参数
+
+=== `$#` 获取参数数量
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# echo 'echo $# $0 $1' > test.sh
+[root@izbp10lqlgy2g31s41bt94z ~]# cat test.sh
+echo $# $0 $1
+[root@izbp10lqlgy2g31s41bt94z ~]# sh test.sh I am a shuashua
+4 test.sh I
+----
+=== `$@ $*` 数组的形式引用参数列表
+它们的区别在于使用双引号括起来用时，假设传入的参数为1 2 3，那么"$@"的值为”1”、”2”、”3”三个变量，$*的值为”1 2 3”一个变量
+----
+test.sh
+echo '$@的数组参数格式'
+for x in "$@"
+do
+  echo + $x
+done
+echo '$*的数组参数格式'
+for x in "$*"
+do
+  echo + $x
+done
+
+root@izbp10lqlgy2g31s41bt94z:~# sh test.sh 1 2 3
+$@的数组参数格式
++ 1
++ 2
++ 3
+$*的数组参数格式
++ 1 2 3
+----
+=== `$?` 判断上一个命令执行是否成功
+执行成功值时0，失败是非0
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# ll
+总用量 172
+-rw-r--r-- 1 root root 49392 2月  25 2019 hs_err_pid24203.log
+-rw-r--r-- 1 root root 49425 2月  13 2019 hs_err_pid25726.log
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $?
+0
+[root@izbp10lqlgy2g31s41bt94z ~]# ca ff
+-bash: ca: 未找到命令
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $?
+127
+----
+
+=== `$()` 等同于使用双引号的作用
+----
+略
+----
+
+=== `$[]` 表达式计算
+此时的[]不是用于判断式的场景，[]作为判断式一般用于bash脚步中if while等条件语句
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $[5 + 5]
+10
+----
+
+=== `$-` 显示shell所使用的当前选项
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $-
+himBH
+
+解释：himBH每一个字符是一个shell的选项，详情man bash然后搜索 -h -B 等。详情参考：http://kodango.com/explain-shell-default-options
+----
+
+=== `$!` 获取后台运行最后一个进程的pid，更多应用在bash脚本
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# cat test.sh &
+[1] 362
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $# $0 $1
+^C
+[1]+  完成                  cat test.sh
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $!
+362
+----
+
+=== `!$` 将上一条命令的参数传递给下一条命令的参数，平时用于更方便，更多应用在bash脚本
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# cd /Users/skyler/project/test
+[root@izbp10lqlgy2g31s41bt94z ~]# ll !$
+[root@izbp10lqlgy2g31s41bt94z ~]# ll /Users/skyler/project/test
+362
+----
+
+=== `!!` 将上一条命令输出 ，平时用于更方便，更多应用在bash脚本
+
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# !!
+[root@izbp10lqlgy2g31s41bt94z ~]# ll /Users/skyler/project/test
+----
+
+=== `$$` 获取当前进程pid
+----
+[root@izbp10lqlgy2g31s41bt94z ~]# echo $$
+31268
+[root@izbp10lqlgy2g31s41bt94z ~]# ps -ef|grep 31268
+root     31268 31266  0 08:10 pts/0    00:00:00 -bash
+----
+当前的进程是bash，pid是31268
+参考：https://www.caosh.me/linux/dollar-in-linux-shell/
+
+
+疑问，如何查看系统正在运行的命令呢
+
+== 结合实际应用的例子
+----
+todo 
+----

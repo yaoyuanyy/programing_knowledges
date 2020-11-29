@@ -1,0 +1,58 @@
+= mysql server timeout 8小时问题 
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+== 8小时问题及interactive_timeout和wait_timeout的区别
+
+实际开发遇到的问题：
+----
+TODO
+----
+
+原理说明
+----
+那么，连接的时长是如何确认的？
+其实，这个与interactive_timeout和wait_timeout的设置有关。
+首先，看看官方文档对于这两个参数的定义
+
+interactive_timeout
+默认是28800，单位秒，即8个小时
+官方文档：
+The number of seconds the server waits for activity on an interactive connection before closing it. An interactive client is defined as a client that uses the CLIENT_INTERACTIVE option to mysql_real_connect(). See also wait_timeout.
+----
+
+----
+wait_timeout
+默认同样是28800s
+官方文档：
+The number of seconds the server waits for activity on a noninteractive connection before closing it.
+On thread startup, the session wait_timeout value is initialized from the global wait_timeout value or from the global interactive_timeout value, depending on the type of client (as defined by the CLIENT_INTERACTIVE connect option to mysql_real_connect()). See also interactive_timeout.
+----
+
+----
+根据上述定义，两者的区别显而易见
+
+1> interactive_timeout针对交互式连接，wait_timeout针对非交互式连接。所谓的交互式连接，即在mysql_real_connect()函数中使用了CLIENT_INTERACTIVE选项。
+     说得直白一点，通过mysql客户端连接数据库是交互式连接，通过jdbc连接数据库是非交互式连接。 
+
+2> 在连接启动的时候，根据连接的类型，来确认会话变量wait_timeout的值是继承于全局变量wait_timeout，还是interactive_timeout。
+
+ 
+下面来测试一下，确认如下问题
+1. 控制连接最大空闲时长的是哪个参数。
+2. 会话变量wait_timeout的继承问题
+----
+参考：https://www.cnblogs.com/ivictor/p/5979731.html

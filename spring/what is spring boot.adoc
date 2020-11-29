@@ -14,3 +14,83 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+== what is spring boot 
+
+----
+    spring家族很庞大，已经成为我们javaweb开发人员不可或缺的组件，他加快了我们开发项目的周期，简化了我们的代码数量
+现在，springboot已经火起来了，他简单易用，容易上手，越来越多的人开始使用它。
+----
+
+=== 那什么是springboot呢
+----
+    即使你已经开始使用了springboot，可能不一定能系统的说出来他是什么，为什么会有他的出现以及他的特性。下面我们来说一下
+----
+
+>   原：Spring Boot is a framework for packaging the spring application with sensible defaults. What does this mean?. You are developing a web application using Spring MVC, Spring Data, Hibernate and Tomcat. How do you package and deploy this application to your web server. As of now, we have to manually write the configurations, XML files, etc. for deploying to web server.
+<!-- more -->
+
+>   译：springboot是一个包装了带有智能默认配置的spring应用的框架。什么意思？假如你正在用springmvc, Spring Data, Hibernate and  
+Tomcat开发一个web应用，你怎样打包和发布这个应用到你的server服务器呢，到目前为止，我们必须手动的写像xml文件这样的配置用于发布到web服务器。
+
+
+=== Why do we need Spring Boot? 
+>   原：1.Most likely you would want to bring all the features of spring into your applications, that means every module in the spring framework has it's own dependencies and configurations that has to be maintained and updated frequently. This consumes lot of effort for development team. Spring Boot eliminates all the nightmare for the developers by auto configuring all the fuss required to run your application
+
+=== 我们为什么需要springboot，即springboot出现的背景
+>   译：1.那是很有可能的：你想要把spring框架的所有特性都应用到你的应用中，但是在spring框架中每个模块都有自己的需要频繁维护和更新的依赖和配置。这对于开发组来说会消耗很多的精力和时间，springboot通过自动配置你的应用所需要的所有设置，这为开发者消除了所有的恶魔。
+
+>   原：2.Over the years spring has become more and more complex as new functionalities have been added. Just visit the page-https://spring.io/projects and we will see all the spring projects we can use in our application for different functionalities. If one has to start a new spring project we have to add build path or add maven dependencies, configure application server, add spring configuration . <b>So a lot of effort is required to start a new spring project as we have to currently do everything from scratch. Spring Boot is the solution to this problem.</b> Spring boot has been built on top of existing spring framework including Spring MVC. Using spring boot we avoid all the boilerplate code and configurations that we had to do previously. Spring boot thus helps us use the existing Spring functionalities more robustly and with minimum efforts.
+
+>   译：2.过去一些年，spring变得越来越综合，越来越庞大，许多新功能被不断添加进来。仅仅访问https://spring.io/projects，我们将看见全部的spring项目，这些项目为我们的应用提供了不同的功能。如果你开始创建一个全新的spring应用，你需要构建路径、添加maven依赖、配置应用服务器、以及spring的配置。<b>所以，创建一个新的应用需要做很多的工作，你必须从头开始做每一件事情。springboot很好的解决了这个问题。</b> springboot已经构建了包括springmvc在内的所有spring框架中的模块，使用springboot我们避免了所有的样板代码和必须做的所有配置。因此，springboot帮助我们以最少的付出使用spring的现有的功能技巧
+
+>   原：Spring based applications have a lot of configuration. For example, when we use Spring MVC, we need to configure component scan, dispatcher servlet, a view resolver, web jars(for delivering static content) among other things.
+
+>   译：使用spring的应用会有很多的配置。例如，当我们应用springmvc时，我们需要配置component scan, dispatcher servlet, a view resolver, web jars等等，如下面代码片段：
+
+
+----
+ <bean
+        class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+        <property name="prefix">
+            <value>/WEB-INF/views/</value>
+        </property>
+        <property name="suffix">
+            <value>.jsp</value>
+        </property>
+  </bean>
+   
+  <mvc:resources mapping="/webjars/**" location="/webjars/"/>
+----
+
+=== Spring Boot brings in new thought process around this
+>   原：Can we bring more intelligence into this? When a spring mvc jar is added into an application, can we auto configure some beans automatically?
+  ● How about auto configuring a Data Source if Hibernate jar is on the classpath?
+  ● How about auto configuring a Dispatcher Servlet if Spring MVC jar is on the classpath?
+Spring Boot looks at a) Frameworks available on the CLASSPATH b) Existing configuration for the application. Based on these, Spring Boot provides basic configuration needed to configure the application with these frameworks. <b>This is called Auto Configuration.</b>
+
+=== springboot带来了全新的思维过程 
+>   译：我们能带来更多的智能吗，当springmvc的jar包添加到应用时这些bean能自动的添加自动配置吗，
+  ● 如果Hibernate jar放在classpath下，怎样自动配置data source数据源呢
+  ● 如果Spring MVC jar放在classpath下，怎样自动配置Dispatcher Servlet呢
+springboot检查两个地方：a.CLASSPATH下存在有效的jar; b.为应用添加的配置信息。基于以上，springboot为使用了spring模块的应用提供了所需要的最基础的配置，<b>这被成为：自动配置.</b>
+
+=== Features of Spring boot
+>   原：
+  ● Auto-Configuration - No need to manually configure dispatcher servlet, static resource mappings, property source loader, message converters etc.
+  ● Dependency Management - The different versions of commonly used libraries are pre-selected and grouped in different starter POMs that we can include in your project. By selecting one Spring Boot version we are implicitly selecting dozens of dependencies that we would have to otherwise select and harmonize ourself. Spring Boot is magical framework that bundles all the dependencies for you
+  ● Advanced Externalized Configuration - There is a large list of bean properties that can be configured through application.properties file without touching java or xml config.
+  ● Production support- We get health checking, application and jvm metrics, jmx via http and a few more things for free.
+  ● Runnable Jars - We can package your application as a runnable jar with embedded tomcat included so it presents a self-contained deployment unit
+  ● Zero XML configuration
+
+=== Spring boot特性
+>   译：
+  ● Auto-Configuration(自动配置) - 不再需要手动配置像dispatcher servlet, static resource mappings, property source loader, message converters 等等
+  ● Dependency Management - 通常情况下，所使用的类库的不同版本是预选的且被分组在不同的starter POMs中。 然而，通过选择一个springboot的版本，隐含的我们已经选择应用选使用的依赖(dependencies )的版本。springboot是一个神奇的框架，他为你选好了你的应用所使用的所有依赖的版本
+  ● Advanced Externalized Configuration(高级的具体的配置) - 你可以通过application.properties文件设置需要配置的一系列bean的属性而不必操作java代码和xml文件
+  ● Production support(生产支持)- 我们可以免费的进行健康检查、应用或java虚拟机的信息图谱
+  ● Runnable Jars(可运行的jar包) - 我们可以把应用打成一个可运行的内嵌了tomcat的jar包。所以，它存在自包含的部署单元
+  ● Zero XML configuration(0xml配置) - 你的应用再也不用存在xml文件了，甚至web.xml也不用了，这些配置都放在了标有@configuration的java类中
+
+本文翻译的不尽善尽美，但用心的做出来的，英文不太好的可以参考。

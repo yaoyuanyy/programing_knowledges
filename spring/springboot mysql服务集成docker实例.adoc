@@ -1,0 +1,389 @@
+= springboot mysql服务集成docker实例 
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+== 回顾
+上篇笔者实战操作了< https://yaoyuanyy.github.io/2019/05/22/springboot%E9%9B%86%E6%88%90docker%E5%AE%9E%E4%BE%8B/[springboot集成docker] >从0开始的操作例子，本篇再深入一点：把mysql继承进来，形成springboot+mysql服务集成docker实例，本篇是在上篇< (https://yaoyuanyy.github.io/2019/05/22/springboot%E9%9B%86%E6%88%90docker%E5%AE%9E%E4%BE%8B/[springboot集成docker]>的基础上进行的
+
+项目代码: https://github.com/yaoyuanyy/springboot_project/tree/feature-docker-20190517/springboot_mybatis[springboot_mybatis]
+
+
+== docker集成springboot_mybatis+mysql
+
+=== 集成mybatis
+上篇的项目我们copy下，改个名：springboot_mybatis，在此基础上集成mybatis相关代码
+----
+# 增加实体bean: User
+package com.yy.demo.bean;
+
+import lombok.Data;
+
+@Data
+public class User {
+    private long id;
+    private long studentId;
+    private String name;
+    private String mobile;
+    private int score;
+}
+
+# 创建UserMapper
+package com.yy.demo.mapper;
+import org.apache.ibatis.annotations.Param;
+import com.yy.demo.bean.User;
+
+public interface UserMapper {
+    User findById(@Param("id") long id);
+}
+
+# 创建UserMapper对应的xml文件
+<mapper namespace="com.yy.demo.mapper.UserMapper">
+  <resultMap type="com.yy.demo.bean.User" id="userMapper">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="mobile" column="mobile"/>
+        <result property="score" column="score"/>
+        <result property="studentId" column="studentId"/>
+  </resultMap>
+	
+  <select id="findById" parameterType="long" resultMap="userMapper">
+        select * from user where id=#{id}
+  </select>
+</mapper>
+----
+
+application.yml文件添加mybatis相关配置如下
+----
+mybatis:
+  == Locations of Mapper xml config file
+  mapperLocations: classpath*:com/yy/**/mapper/*.xml
+  == 实体类包路径 Packages to search for type aliases. (Package delimiters are ",; \t\n")
+  typeAliasesPackage: com.yy.**.bean
+  == Location of MyBatis xml config file.
+  == 注意：这个属性与mybatis.configuration二选一
+  config-location: classpath:mybatis/mybatis-config.xml
+  ==  检查 mybatis 配置是否存在，一般命名为 mybatis-config.xml
+  check-config-location: true
+
+----
+
+pom.xml文件引入mysql和mybatis如下
+----
+<dependency>
+    <groupId>mysql</groupId>
+    <artifactId>mysql-connector-java</artifactId>
+    <version>8.0.11</version>
+</dependency>
+<dependency>
+    <groupId>org.mybatis.spring.boot</groupId>
+    <artifactId>mybatis-spring-boot-starter</artifactId>
+    <version>1.3.2</version>
+</dependency>
+
+----
+src/main/resources下新增schema.sql文件，否则你需要在docker中安装mysql server, 项目中添加schema.sql可以简便demo的搭建(demo可以这样写，实际项目就不能偷懒了)，内容如下
+----
+drop table if exists user;
+
+CREATE TABLE `user` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(50) NOT NULL,
+  `mobile` varchar(20) NOT NULL,
+  `score` int(4) NOT NULL DEFAULT '0' COMMENT '分数',
+  `studentId` bigint(20) unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_studentId` (`studentId`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (1, 'y', '13000000000', 0, 1);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (2, 'l', '13800008888', 5, 2);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (3, 's', '111', 0, 3);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (4, 's', '111', 0, 33);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (5, 's', '112', 0, 4);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (7, 's', '113', 0, 5);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (8, 's', '113', 0, 60);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (9, 's', '114', 0, 7);
+INSERT INTO `user`(`id`, `name`, `mobile`, `score`, `studentId`) VALUES (10, 's', '115', 0, 8);
+----
+
+application.yml文件添加mysql连接配置
+----
+#profile
+spring:
+  datasource:
+    url: jdbc:mysql://${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?allowMultiQueries=true&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: @spring.datasource.driverlassName@
+
+# 这里使用了maven profile和spring profile特性，@符号使用了maven profile特性，${}使用spring profile特性，我们使用的是dev profile(具体参见项目代码dev.properties和application-dev.yml), 注：你会发现application-dev.yml没有“DATABASE_HOST ···”的声明，那是因为我们要在docker run的时候指定，如果你使用application-local.yml就发现有了。你会发现local环境可以直接起项目，dev环境使用docker起项目。项目对外保持一致，无需任何修改。
+----
+
+创建controller和service
+----
+@RestController
+@Slf4j
+@RequestMapping("/user")
+public class UserController {
+
+    @Resource
+    private IUserService userService;
+    /**
+    * eq: http://localhost:2372/user/findById?id=3
+    * @param id
+    * @return
+    */
+    @GetMapping("/findById")
+    public ResponseResult findById(long id, @AttrbuteArg("test") String name, ModelMap modelMap) {
+        log.info("findById param id:{}", id);
+
+        User user = userService.fingById(id);
+    log.info("user:{}", user);
+        System.out.println("ll: "+modelMap.get("ll"));
+    return ResponseResult.ok(user);
+    }
+}
+
+public interface IUserService {
+    User fingById(long id);
+}
+@Service
+public class UserServiceImpl implements IUserService {
+    @Resource
+    private UserMapper userMapper;
+
+    @Override
+    public User fingById(long id) {
+      return userMapper.findById(id);
+    }
+}
+----
+到这里代码方面的东东添加好了。
+
+
+=== 构建项目并发到docker服务器
+
+项目根路径下执行：`mvn clean package docker:build -DskipTests`，将项目打包发到docker服务器上。控制台提示build success后，登录远程docker 服务器看见新传上来的image 镜像，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129145936.png[20201129145936]
+
+=== docker运行mysql image
+我们使用docker run来启动一个mysql image,因为docker hub已经有了很多的常用image, mysql是其中之一，我们只用运行就好
+----
+$ docker run -d -t --name mybatis-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=jdbc_test -e MYSQL_USER=root -e MYSQL_PASSWORD=root123 mysql:latest
+
+# 解释一下这个命令，可以自行使用docker run --help查看
+# docker run 运行一个image镜像，此处的image为：mysql:latest(mysql最新版本)，同时产生一个container,名字使用--name 指定，此处为mybatis-mysql
+# -d 在后台运行
+# -t 分配一个伪tty。如果不加-t，命令运行后，你会发现产生的container的状态是Exited。原因是：你镜像里面指定的默认启动程序是bash，对于Linux下的shell程序来说，tty是必须的，所以启动容器的时候要加上-t参数。
+# 如果docker run没有加-t ，那么运行完docker run后，需要接着运行docker start containerId
+# -e 为这个容器设置环境变量
+----
+运行命令后，查看产生的container的状态，可以看到状态为Up，表明mysql已经启动，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150116.png[20201129150116]
+
+
+=== docker运行springboot_mybatis项目
+现在我们可以运行刚刚上传的项目(springboot_mybatis)了。
+----
+$ docker run -d -t --name demo-springboot-docker --link mybatis-mysql:mysql -p 2372:2371 -e DATABASE_HOST=mybatis-mysql -e DATABASE_PORT=3306 -e DATABASE_NAME=jdbc_test -e DATABASE_USER=root -e DATABASE_PASSWORD=root123 springboot_demo/springboot_mybatis
+
+# 解释一下这个命令 -d -t --name -e 这些参数上面已经解释过，忘记了回看下就好.
+# --link 连接一个指定的container
+# -p 指定启动的container暴露的端口号，2372:2371指定为springboot_demo/springboot_mybatis仓库产生的container的端口号为2372，冒号后面的2371为springboot_mybatis web项目的端口，冒号起到映射的作用，即docker 容器的2372端口映射到web项目的2371端口
+# 注意-e 后面数据库配置的value和启动mysql镜像时设置的一致
+----
+运行命令后你可能得到一个错误，如下图，意思为依赖的mybatis-mysql容器不是运行状态，docker ps -a你会发现mybatis-mysql是Exited状态
+----
+docker: Error response from daemon: Cannot link to a non running container: /mybatis-mysql AS /demo-springboot-docker/mysql
+----
+为解决这个问题，执行命令：`docker start mybatis-mysql`，然后`docker ps -a` 查看mybatis-mysql启动了。
+再次执行启动springboot_demo/springboot_mybatis仓库的命令。如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150223.png[20201129150223]
+
+没有报错，但是我们不知道springboot_mybatis这个web项目是否启动成功，所以我们会想看下web项目的启动日志。这时进行如下步骤，首先执行`docker ps`查看正在运行的container，找到我们springboot_demo/springboot_mybatis image对应的containerId，然后执行`docker logs -f -t --tail 20 containerId`，containerId替换为刚才找到的containerId。回车就可以看到springboot_mybatis的日志了，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150252.png[20201129150252]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150335.png[20201129150335]
+
+=== 访问springboot_mybatis服务
+项目启动后，就可以访问了，也可以验证我们这一系列操作是否正确，curl项目path，如下图
+----
+$ curl http://localhost:2372/user/findById?id=3
+----
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150411.png[20201129150411]
+
+到这里，docker集成springboot+mysql是搭建完成了。但是加入springboot_mybatis不仅依赖mysql，还有redis mongodb，nginx ···，多个组件时，如果每个组件都要docker run ···，你会疯掉的。这时docker-compose解决了这个问题。下面我们在此基础上使用docker-compose集成springboot_mybatis+mysql。
+
+
+== docker-compose集成springboot_mybatis+mysql
+项目代码不变，我们还是使用springboot_demo/springboot_mybatis这个image。
+
+=== docker-compose安装和运行 
+docker-compose的安装和运行上文已经实战过，参见：<https://yaoyuanyy.github.io/2019/05/22/springboot%E9%9B%86%E6%88%90docker%E5%AE%9E%E4%BE%8B/[springboot集成docker]> docker-compose部分
+
+=== docker-compose.yml添加mysql的配置
+相对于docker集成mysql,docker-compose的优势是将mysql等组件的配置信息定义在docker-compose.yml文件中, 在docker服务器上创建个目录放docker-compose.yml文件。如
+`cd /root/skyler_home/project/docker_compose`，没有这个目录就创建下，vim编辑docker-compose.yml，如下，添加如下内容
+----
+[root@xxxxx docker_compose]# vim docker-compose.yml
+version: '3.3'
+
+services:
+  mybatis-mysql:
+    image: mysql:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root123
+      - MYSQL_DATABASE=jdbc_test
+    ports:
+      - "3306:3306"
+    container_name: mybatis-mysql_dev
+  demo-springboot-docker:
+    image: springboot_demo/springboot_mybatis
+#    build: .
+    depends_on:
+      - mybatis-mysql
+    ports:
+      - 2372:2371
+    environment:
+      - DATABASE_HOST=mybatis-mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=root123
+      - DATABASE_NAME=jdbc_test
+----
+可以看到，这里把命令启动mysql和springboot-mybatis的信息都放在了docker-compose.yml中
+
+=== 上传springboot_mybatis project到docker服务器
+
+docker-compose执行需要项目jar和Dockerfile，接下来我们需要把springboot_mybatis和Dockerfile上传到docker-compose.yml所在目录
+现在回到intellij，执行`mvn clean package`，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151045.png[20201129151045]
+使用scp上传Dockerfile和jar文件
+----
+cd /Users/xx/springboot_mybatis/target/docker
+
+scp Dockerfile root@48.99.190.38:/root/skyler_home/project/docker_compose #输入密码
+
+scp springboot_mybatis-0.0.1-SNAPSHOT.jar root@48.99.190.38:/root/skyler_home/project/docker_compose #输入密码
+
+----
+现在docker_compose目录下文件如下
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151118.png[20201129151118]
+
+
+=== 使用docker_compose启动springboot_mybatis jar
+ 
+启动前需要stop rm之前启动的container
+----
+docker stop demo-springboot-docker
+docker stop mybatis-mysql
+docker rm demo-springboot-docker
+docker rm mybatis-mysql
+----
+
+==== 运行 
+----
+$ docker-compose up
+----
+可能会报错，如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151236.png[20201129151236]
+而且springboot-mybatis和mysql container已经创建了，但是状态是Exited
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151322.png[20201129151322]
+
+
+==== 报错原因
+1. mysql container状态是Exited的原因:
+为docker-compose.yml中`MYSQL_USER=root`。此docker镜像使用您提供的密码创建root用户，因此当您想再次创建root用户时，它会失败并关闭容器。只需将其更改为`MYSQL_USER=myuser`即可
+2. springboot-mybatis启动失败的原因:
+本质是docker-compose的启动顺序问题。springboot-mybatis依赖mysql, 在docker-compose.yml中，通过配置depends_on, links, volumes_from, 以及 network_mode: "service:...".可以控制服务的启动顺序，但是却不能知道被依赖的服务是否启动完毕，在一个服务必须要依赖另一个服务完成的时候，这样就会有问题。从springboot-mybatis启动日志也可以看出demo-springboot-docker_1先于mybatis-mysql_dev初始化了
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151426.png[20201129151426]
+
+==== 解决办法
+针对这样的问题，有两种解决方案:
+
+1、足够的容错和重试机制，比如连接数据库，在初次连接不上的时候，服务消费者可以不断重试，直到连接上服务。也就是在服务中定义： restart: always
+
+2、同步等待，使用 wait-for-it.sh或者其他 shell脚本将当前服务启动阻塞，直到被依赖的服务加载完毕。这种方案后期可以尝试使用
+
+这里我们使用第一种。具体操作：编辑docker-compose.yml，新增restart: always。docker-compose.yml全内容为：
+----
+version: '3.3'
+
+services:
+  mybatis-mysql:
+    image: mysql:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123
+# MYSQL_USER设置为root，启动服务时报错：Operation CREATE USER failed for 'root'@'%'
+      - MYSQL_USER=skyler
+      - MYSQL_PASSWORD=root123
+      - MYSQL_DATABASE=jdbc_test
+    ports:
+      - "3306:3306"
+    restart: always 
+    container_name: mybatis-mysql_dev
+  demo-springboot-docker:
+    restart: always
+    image: springboot_demo/springboot_mybatis
+    depends_on:
+      - mybatis-mysql
+    ports:
+      - 2372:2371
+    environment:
+      - DATABASE_HOST=mybatis-mysql
+      - DATABASE_PORT=3306
+      - DATABASE_USER=skyler
+      - DATABASE_PASSWORD=root123
+      - DATABASE_NAME=jdbc_test
+----
+
+再运行一次：`docker-compose up -d`。-d为后台启动，可选
+使用`docker logs -f -t --tail 20 62617312c8bf`看日志，你会发现，失败之后自动重启，最后显示服务启动成功
+
+
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151519.png[20201129151519]
+使用docker-compose ps(类似docker ps -a)查看container的状态为Up
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151556.png[20201129151556]
+
+
+现在，无论docker集成springboot_mybatis+mysql还是docker-compose集成springboot_mybatis+mysql，都实战完成
+
+
+文中所用代码: https://github.com/yaoyuanyy/springboot_project/tree/feature-docker-20190517/springboot_mybatis[springboot_mybatis]
+
+== 扩展
+===  `docker run与docker start`区别
+`docker run IMAGE_ID`，而`docker start CONTAINER_ID`。即`run runs an image`; `start starts a container`。`docker run = docker create + docker start`
+
+=== docker交互式任务
+格式：`docker exec [OPTIONS] CONTAINER COMMAND [ARG...]`
+ 
+-i, --interactive    Keep STDIN open even if not attached
+-t, --tty            Allocate a pseudo-TTY
+
+如：`docker exec -it 62617312c8bf /bin/bash`，这个命令是进入容器62617312c8bf内部打开shell，ll 可以看到容器的目录结构，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151719.png[20201129151719]
+
+`Ctrl + d` 退出
+
+=== 进入mysql容器内部
+
+`docker ps`找到mysql容器containerId或containerName，运行 `docker exec -it containerId/containerName bash`, `mysql -uskyler -p`，输入密码，进去mysql server查看数据库,如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151750.png[20201129151750]

@@ -14,3 +14,673 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+== 背景
+
+[tip]
+远程调用实现技术方案中, spring cloud openfeign可以说是入门简单，使用方便。作为spring cloud家族成员，它的使用量广泛。了解spring framework, spring boot, spring cloud本身就是一件技术人分内的事。进阶路上，这是必须做的。
+
+> debug源码，直观收益是学习标准的代码风格，编码思想，实现方法和技巧，从而提升自身的能力
+ 
+== 收获
+本篇偏重阐述`feign`的实现原理，而对他的用法用一个示例简单展示。因为本篇让你收获的不仅仅是`feign`的用法，更重要的是通过`feign`的原理阐述，能提炼出为你我所用的知识点，为你自己实现@EnableXXX注解提供一些依据和片段，力争实现突破，生产出你自己的东西。
+
+本篇的目标是1.说清`feign`组件的加载即解析，尤其是关键组件的原理源码阐述；2.当用户请求进来后，`feign`是如何将`feign`方法解析为`http request`请求信息的。3.此外，在这基础上，重点阐述`feign`整个过程给我们带来哪些价值：两方面
+一、复用点
+----
+1. 如何加载一个package下指定的class文件即生成BeanDefinition放入spring容器
+2. Class<T>类生成T的instance
+3. 如何获取spring中的BeanDefinition、Object
+----
+
+二、扩展点
+----
+1. 扩展RuquestInteceptor，实现Get方式接受body data
+2. 自定义@EnableFeignClients.defaultConfiguration的值
+3. 自定义@FeignClient.configuration的值
+4. properties.yml和@Configuration声明的feign组件的优先级
+5. 自定义@EnableXXX组件，解决其他的问题
+----
+
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191109101703.png[20191109101703.png]
+
+
+== 示例
+下面撸出最简单的feign使用案例。`分别定义一个启动类、controller、feign接口`。如下，将这个作为素材进行`feign源码分析`
+----
+@SpringBootApplication
+@EnableFeignClients("com.skyler.manager")
+@EnableDiscoveryClient
+public class SkylerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(SkylerApplication.class, args);
+    }
+}
+
+@RestController
+@RequestMapping("/brand")
+public class BrandController {
+    @Autowired private BrandFeignClient brandFeignClient;
+
+    @PostMapping(value = "/create", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResultVO create(@RequestBody BrandParam param) {
+        return brandFeignClient.create(param);
+    }
+}
+
+@FeignClient(value = "${provider.application:serverB}", contextId = "BrandFeignClient")
+public interface BrandFeignClient {
+    
+    @PostMapping(value = "api/brand/create", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
+    ResultDTO create(@RequestBody BrandParam param);
+
+    @GetMapping("api/brand/query")
+    ResultDTO<List<BrandDto>> query(@RequestParam("id") Long id, @RequestParam("code") String code);
+}
+----
+== feign关键组件类
+先列出`feign关键`的地方，你有个大概印象，进行源码分析时希望你能有意识的`重点照顾`这些关键点。
+
+| 关键类 | 作用| 说明
+| --- | ----| ---|
+| @EnableFeignClient | 声明引入feign组件的标识，同时负责解析@FeignClient
+| @FeignClient |声明一个远程调用的接口，供业务方完成远程调用
+|  FeignClientsRegistrar |加载@FeignClient的所有.class文件，生成beanDefinitioin和beanInstance放入spring容器
+| FeignClientFactoryBean |完成feign远程调用所需要组件的聚合，同时还有@FeignClient的代理类的生成
+| FeignAutoConfiguration |AutoConfiguration的子类，定义@Bean FeignContext、@Bean xxxHttpClient等
+| FeignClientsConfiguration | "Feign configuration"的默认配置值，@EnableFeignClients.defaultConfiguration如果没有设置值，默认就是FeignClientsConfiguration。
+
+== feign代码加载原理
+下图是spring boot所有项目加载@Configuration的类时都要走的路径(除了FeignClientsRegistrar)。参见<springboot @Configuration类的加载源码和扩展点解析>
+
+https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191102190916.png[图一]
+
+
+
+=== feign相关组件的.class转化为BeanDefinition
+这个过程可以分成两部分：`FeignAutoConfiguration类和FeignClientsConfiguration类`等，`@EnableFeignClients和@FeignClient`。
+
+前者加载过程同spring boot所有组件加载的逻辑，正如图一所示；而后者是采用`feign`自己的加载方式。当然两者加载过程开始部分是一样的。即从`springApplication.run()`到`ConfigurationClassPostProcessor.processConfigBeanDefinitions()`是相同的，也是所有`spring boot`项目启动加载共用的逻辑。但是从`processConfigBeanDefinitions()`方法内开始变得不同了。`FeignAutoConfiguration类和FeignClientsConfiguration类`的加载开始于方法内`315行的parser.parse(candidates)`,而`@EnableFeignClients和@FeignClient`的加载开始于`327行的this.reader.loadBeanDefinitions(configClasses)`。其实，从另一角度可以说`FeignAutoConfiguration类和FeignClientsConfiguration`类的加载是通用的，`@EnableFeignClients和@FeignClient`的加载是特殊的，是从通用的某一个点拉出去的分支。所以特殊的是在通用的基础上进行的。从两个不同点进入到各自具体的`.class-->BeanDefinition`的加载过程。同样的目的，只是使用不同的方式。下面我们详细说下两种加载的源码和原理
+
+NOTE::值得注意的是，这两种加载方式都是<font color=green>我们实际开发过程中的扩展点：.class转化为beanDefiniton的代码过程</font>。重写他们以完成我们自己实际的逻辑
+
+==== FeignAutoConfiguration类和FeignClientsConfiguration类等
+前面说到，他们的加载开始于ConfigurationClassPostProcessor.processConfigBeanDefinitions()方法的`315行: 的parser.parse(candidates)`。我们就从这里说起
+----
+public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
+    List<BeanDefinitionHolder> configCandidates = new ArrayList<>();
+    String[] candidateNames = registry.getBeanDefinitionNames();
+    for (String beanName : candidateNames) {
+        BeanDefinition beanDef = registry.getBeanDefinition(beanName);
+        // 检查beanDefinition的beanClass是否为标识了@Configuration的class，符合的放入集合
+        if (ConfigurationClassUtils.checkConfigurationClassCandidate(beanDef, this.metadataReaderFactory)) {
+            configCandidates.add(new BeanDefinitionHolder(beanDef, beanName));
+        }
+    }
+    // 根据@Order给集合中的对象排序，也就是对象被加载的顺序
+    configCandidates.sort((bd1, bd2) -> {
+        int i1 = ConfigurationClassUtils.getOrder(bd1.getBeanDefinition());
+        int i2 = ConfigurationClassUtils.getOrder(bd2.getBeanDefinition());
+        return Integer.compare(i1, i2);
+    });
+
+    // Parse each @Configuration class
+    ConfigurationClassParser parser = new ConfigurationClassParser(
+            this.metadataReaderFactory, this.problemReporter, this.environment,
+            this.resourceLoader, this.componentScanBeanNameGenerator, registry);
+
+    Set<BeanDefinitionHolder> candidates = new LinkedHashSet<>(configCandidates);
+    do {`
+        // FeignAutoConfiguration类和FeignClientsConfiguration类等通用组件的加载开始处
+        // 方法功能为以candidates为起点进行向下加载。一般为项目的启动类，如这里的SkylerApplication
+        parser.parse(candidates);
+        parser.validate();
+
+        Set<ConfigurationClass> configClasses = new LinkedHashSet<>(parser.getConfigurationClasses());
+        // Read the model and create bean definitions based on its content
+        if (this.reader == null) {
+            this.reader = new ConfigurationClassBeanDefinitionReader(
+                registry, this.sourceExtractor, this.resourceLoader, this.environment,
+                this.importBeanNameGenerator, parser.getImportRegistry());
+        }
+        // @EnableFeignClients和@FeignClient的加载处，当然通用的加载也会走这里
+        // 方法功能为解析每个ConfigurationClass，看看有没有@Bean @Import @ImportResource @Scope注解，如果如解析他们形成BeanDefinition，放入beanFactory容器中
+        this.reader.loadBeanDefinitions(configClasses);
+
+        candidates.clear();
+        if (registry.getBeanDefinitionCount() > candidateNames.length) {
+            String[] newCandidateNames = registry.getBeanDefinitionNames();
+            for (String candidateName : newCandidateNames) {
+                    BeanDefinition bd = registry.getBeanDefinition(candidateName);
+                    if (ConfigurationClassUtils.checkConfigurationClassCandidate(bd, this.metadataReaderFactory)) {
+                        candidates.add(new BeanDefinitionHolder(bd, candidateName));
+                    }
+                }
+            }
+            candidateNames = newCandidateNames;
+        }
+    }
+    while (!candidates.isEmpty());
+}
+----
+详细的加载是始于parser.parse(candidates)行，详细参见todo。到这里，FeignAutoConfiguration类和FeignClientsConfiguration类的加载和解析就完成了。核心是将类中@Bean方法(如feignEncoder()、feignDecoder()、feignBuilder()等)加载成BeanDefinition放入spring beanFactory容器中，为BeanDefinition转化为BeanInstance做准备。@Configuration标识的class由BeanDefinition转化为BeanInstance的详细过程参见todo@Configuration class解析
+
+==== @EnableFeignClients和@FeignClient
+这部分的加载是从processConfigBeanDefinitions()方法的`327行的this.reader.loadBeanDefinitions(configClasses)`开始，再往里说是从此方法内的ConfigurationClassBeanDefinitionReader.loadBeanDefinitionsForConfigurationClass()开始的。也就是开始处理ConfigurationClass对象。当处理到ConfigurationClass(SkylerApplication)时，就会触发@EnableFeignClients的解析了。原理为@EnableFeignClients标注在引入了@SpringBootApplication(内含@Configuration)的SkylerApplication类上,即SkylerApplication类标注了@Configuration注解，所以，SkylerApplication会被解析成ConfigurationClass对象。且@EnableFeignClients内含@Import注解，所以ConfigurationClassPostProcessor解析这个ConfigurationClass(SkylerApplication)对象时，会加载到@EnableFeignClients内嵌注解@Import的FeignClientsRegistrar类。又FeignClientsRegistrar是ImportBeanDefinitionRegistrar子类，所以ConfigurationClassBeanDefinitionReader在解析ImportBeanDefinitionRegistrar类型时，会解析FeignClientsRegistrar对象，即Feign相关组件解析和加载就开始了。
+
+由于FeignClientsRegistrar是ImportBeanDefinitionRegistrar类型，它重载了registerBeanDefinitions()方法来实现解析@FeignClient的功能，这也是FeignClientsRegistrar类的核心作用。如下代码
+----
+@Override
+public void registerBeanDefinitions(AnnotationMetadata metadata,
+        BeanDefinitionRegistry registry) {
+    // 解析@EnableFeignClients的defaultConfiguration属性，用于feign的全局设置       
+    registerDefaultConfiguration(metadata, registry);
+    // 解析@FeignClient注解
+    registerFeignClients(metadata, registry);
+}
+----
+方法的入参：metadata是ConfigurationClass的元注解信息，即SkylerApplication类的注解信息；registry是DefaultListableBeanFactory对象引用。解析生成的BeanDefinition都放入spring beanFactory容器
+
+----
+private void registerDefaultConfiguration(AnnotationMetadata metadata,
+        BeanDefinitionRegistry registry) {
+    // 获取EnableFeignClients注解的属性及值        
+    Map<String, Object> defaultAttrs = metadata
+            .getAnnotationAttributes(EnableFeignClients.class.getName(), true);
+    // 获取的属性及name存入spring的BeanFactory容器内
+    registerClientConfiguration(registry, name,
+            defaultAttrs.get("defaultConfiguration"));
+    }
+}
+----
+<font color=green>这里我们实际开发中的扩展点为:</font>引入@EnableFeignClients时，可以自定义它的defaultConfiguration属性的值，从而实现我们自己关于Feign的配置。如重写Feign请求响应信息的加密解密、fallback、fallbackFactory等
+
+我们重点看registerFeignClients()方法的逻辑：加载标注了@FeignClient的.class文件，解析并获取符合条件的class，生成BeanDefinition，放入spring beanFactory容器。代码如下
+----
+public void registerFeignClients(AnnotationMetadata metadata,
+        BeanDefinitionRegistry registry) {
+    // 实例化对象
+    ClassPathScanningCandidateComponentProvider scanner = getScanner();
+    scanner.setResourceLoader(this.resourceLoader);
+
+    Set<String> basePackages;
+
+    Map<String, Object> attrs = metadata
+            .getAnnotationAttributes(EnableFeignClients.class.getName());
+    AnnotationTypeFilter annotationTypeFilter = new AnnotationTypeFilter(
+            FeignClient.class);
+    final Class<?>[] clients = attrs == null ? null
+            : (Class<?>[]) attrs.get("clients");
+    // 确定要搜索的package
+    if (clients == null || clients.length == 0) {
+        scanner.addIncludeFilter(annotationTypeFilter);
+        basePackages = getBasePackages(metadata);
+    }
+    else {
+        final Set<String> clientClasses = new HashSet<>();
+        basePackages = new HashSet<>();
+        for (Class<?> clazz : clients) {
+            basePackages.add(ClassUtils.getPackageName(clazz));
+            clientClasses.add(clazz.getCanonicalName());
+        }
+        AbstractClassTestingTypeFilter filter = new AbstractClassTestingTypeFilter() {
+            @Override
+            protected boolean match(ClassMetadata metadata) {
+                String cleaned = metadata.getClassName().replaceAll("\\$", ".");
+                return clientClasses.contains(cleaned);
+            }
+        };
+        scanner.addIncludeFilter(new AllTypeFilter(Arrays.asList(filter, annotationTypeFilter)));
+    }
+
+    // 加载package将标注了@FeignClient的.class转化为BeanDefinition，放入spring beanFactory容器
+    for (String basePackage : basePackages) {
+        Set<BeanDefinition> candidateComponents = scanner.findCandidateComponents(basePackage);
+
+        for (BeanDefinition candidateComponent : candidateComponents) {
+            if (candidateComponent instanceof AnnotatedBeanDefinition) {
+                AnnotatedBeanDefinition beanDefinition = (AnnotatedBeanDefinition) candidateComponent;
+                AnnotationMetadata annotationMetadata = beanDefinition.getMetadata();
+                 
+                Map<String, Object> attributes = annotationMetadata
+                        .getAnnotationAttributes(FeignClient.class.getCanonicalName());
+
+                // 获取@FeignClient的configuration属性值，生成BeanDefinition放入spring beanFactory容器
+                // 还记得@EnableFeignClient.defaultConfiguration的属性值吗，对比@FeignClient.configuration，所以前者是所有@FeignClient使用，后者是单个@FeignClient使用，后者优先级高于前者
+                registerClientConfiguration(registry, getClientName(attributes), attributes.get("configuration"));
+                // 将每个@FeignClient解析，生成BeanDefinition放入spring BeanFactory容器
+                registerFeignClient(registry, annotationMetadata, attributes);
+            }
+        }
+    }
+}
+----
+为搜索到符合条件的@FeignClient的类，此方法分两步
+1. 首先，确定要搜索的package目录
+2. 其次，从这些package目录下获取和解析@FeignClient的类
+
+方法分三个情况来确定package包目录：优先从@EnableFeignClients.clients获取属性值，从而确定package目录；第二优先级从EnableFeignClients的属性value、basePackages、basePackageClasses获取属性值，从而确定package目录；最后优先级从@EnableFeignClient所在的类的package，从而确定package目录。
+
+确定了package目录后，开始加载package包目录下标注了@FeignClient的.class文件。加载.class文件使用的是ClassPathScanningCandidateComponentProvider类，这个类的resourceLoader变量提供classLoader来加载.class文件；同时includeFilters变量标识要将哪些类转化为BeanDefinition。最后将BeanDefinition放入spring BeanFactory容器。为了尽量不扰乱feign部分，加载.class及转化为BeanDefinition这里不阐述，详细代码见ClassPathScanningCandidateComponentProvider.scanCandidateComponents()方法
+
+特别注意：<font color=green>这里有一个我们实际开发中的扩展点: 加载指定package目录下标注了指定注解的.class文件们转化为BeanDefinitioon放入spring beanFactory容器</font>。具体如下
+----
+第一步：
+ClassPathScanningCandidateComponentProvider scanner = getScanner();
+scanner.setResourceLoader(this.resourceLoader);
+AnnotationTypeFilter annotationTypeFilter = new AnnotationTypeFilter(FeignClient.class);
+scanner.addIncludeFilter(annotationTypeFilter);
+第二步：
+Set<BeanDefinition> candidateComponents = scanner.findCandidateComponents(basePackage);
+第三步：
+BeanDefinitionReaderUtils.registerBeanDefinition(holder, registry); //registry为BeanDefinitionRegistry及子类或DefaultListableBeanFactory
+
+----
+经过以上三步，就可以将指定package下的.class文件转化为BeanDefinition，进而放入spring 的BeanFactory容器中。如:你在实际开发中，需要加载com.yourcompany.projectName下的带有@LoginAccess注解的.class文件，直接使用上面的代码，稍加改动就ok了
+
+
+在将每个@FeignClient转化生成BeanDefinition放入spring BeanFactory容器时，这里注意一点：生成的BeanDefinition的beanClass值为FeignClientFactoryBean类型(FeignClientFactoryBean是FactoryBean的子类，在beanDefinition生成beanInstance时发挥作用)。如下代码
+----
+private void registerFeignClient(BeanDefinitionRegistry registry,
+		AnnotationMetadata annotationMetadata, Map<String, Object> attributes) {
+    String className = annotationMetadata.getClassName();
+    BeanDefinitionBuilder definition = BeanDefinitionBuilder.genericBeanDefinition(FeignClientFactoryBean.class);
+    ···
+    BeanDefinitionHolder holder = new BeanDefinitionHolder(beanDefinition, className,new String[] { alias });
+    BeanDefinitionReaderUtils.registerBeanDefinition(holder, registry);
+	}
+----
+现在，feign相关组件的.class转化为BeanDefinition了，BeanDefinition都放入了spring beanFactory容器，即DefaultListableBeanFactroy.beanDefinitionMap属性，这一阶段已经完成。我们以一个实例结束这一阶段：BrandFeignClient标注了@FeignClient，所以BrandFeignClient类转化为BeanDefinition时。生成的BeanDefinition的beanClass值为FeignClientFactoryBean.class，同时BeanDefinition的beanName为BrandFeignClient全限定名。beanName存入beanFactory.beanDefinitionNames；同时，beanName为key，BeanDefinition为value的map存入beanFactory.beanDefinitionMap。需要获取BeanDefinition时，beanFactory容器是以beanName为key从beanDefinitionMap属性中取对应的BeanDefinition的。
+
+
+=== feign相关组件的BeanDefinition转化为BeanInstance
+如果说AbstractApplicatonContext.invokeBeanFactoryPostProcessors()负责加载.class到BeanDefinition的转化，那么AbstractApplicationContext.registerBeanPostProcessors()就负责BeanDefinition到BeanInstance的转化。这正好印证了我在 https://yaoyuanyy.github.io/2019/03/12/BeanFactoryPostProcessory%E4%B8%8EBeanPostProcessor%E5%8C%BA%E5%88%AB/[BeanFactoryPostProcessory与BeanPostProcessor区别
+] 所阐述的那样。beanDefinition转化为beanInstance是spring boot通用的逻辑。详细参见 https://yaoyuanyy.github.io/2019/04/12/springboot%20beanDefinition%E8%BD%AC%E5%8C%96%E4%B8%BAbeanInstance%E8%BF%87%E7%A8%8B%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E6%89%A9%E5%B1%95%E7%82%B9/[springboot beanDefinition转化为beanInstance过程源码分析和扩展点
+] 。大概的逻辑是从beanFactory容器中的beanDefinitionNames和beanDefinitionMap属性中取出BeanDefinition进行实例化，赋属性值等生成BeanDefinition.beanClass对应的beanInstance，然后放入DefaultSingletonBeanRegistry(beanFactory父类).singletonObjects属性中。后面用到的时候根据key从这个属性中获取beanInstance
+
+通过beanDefinition转化为beanInstance是通用逻辑，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191105185059.png[20191105185059.png]
+图中doCreateBean开始变得不同了，因为在spring中bean有两种类型：FactoryBean和Bean；如果是FactoryBean，会根据beanName从AbstractAutowiredCapableBeanFactory.factoryBeanInstanceCache获取出beanInstance，接着传给populateBean()方法再进行处理？，当然如果没有获取到，同样走Bean类型的逻辑，即如果是Bean，会调用createBeanInstance(beanName，mbd，··)通过解析mbd(BeanDefinition类型)得到beanInstance，然后将beanInstance存入DefaultSingletonBeanRegistry(beanFactory父类).singletonObjects。显然，@FeignClient标识的类的BeanDifinition的beanClass是FactoryBean类型(FeignClientFactoryBean)，所以他走FactoryBean的逻辑。我们直接定位到转化的关键代码
+----
+AbstractAutowiredCapableBeanFactory class
+@Override
+protected Object createBean(String beanName, RootBeanDefinition mbd, @Nullable Object[] args)  {
+    Object beanInstance = doCreateBean(beanName, mbd, args); // (1)
+    return beanInstance;
+}
+
+protected Object doCreateBean(final String beanName, final RootBeanDefinition mbd, final @Nullable Object[] args){
+    // Instantiate the bean.
+    BeanWrapper instanceWrapper = null;
+    if (mbd.isSingleton()) {
+        instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
+    }
+    if (instanceWrapper == null) {
+        instanceWrapper = createBeanInstance(beanName, mbd, args);
+    }
+}
+
+protected BeanWrapper createBeanInstance(String beanName, RootBeanDefinition mbd, @Nullable Object[] args) {
+    return instantiateBean(beanName, mbd);
+}
+
+protected BeanWrapper instantiateBean(final String beanName, final RootBeanDefinition mbd) {
+    Object beanInstance = getInstantiationStrategy().instantiate(mbd, beanName, parent);
+    BeanWrapper bw = new BeanWrapperImpl(beanInstance);
+    initBeanWrapper(bw);
+    return bw;
+}
+
+SimpleInstantiationStrategy class
+public Object instantiate(RootBeanDefinition bd, @Nullable String beanName, BeanFactory owner) {
+    final Class<?> clazz = bd.getBeanClass();
+    Constructor<?> constructorToUse = clazz.getDeclaredConstructor();
+    return BeanUtils.instantiateClass(constructorToUse);
+}
+----
+上面这几个方法展示了beanInstance生成的大概过程。特别注意，这里有<font color=green>我们实际开发中的扩展点:</font> Class<T>类生成T的instance
+----
+第一步：得到T.class的Class clazz对象 --> clazz=T.class
+第二步：获取clazz的构造函数 --> constructorToUse=clazz.getDeclaredConstructor()
+第三步：生成instance --> BeanUtils.instantiateClass(constructorToUse)
+----
+现在，BeanDefintion转化成BeanInstance了。如果拿BrandFeignClient来说的话，BeanDefintion(class BrandFeignClient)转化为BrandFeignClient对象了，且BrandFeignClient对象作为value(key为BrandFeignClient全限定名)存入DefaultSingletonBeanRegistry(beanFactory父类).singletonObjects
+
+=== feign相关组件的BeanInstance转化为proxy代理类
+当引用了@FeignClient的类的类被实例化时，会inject这个@FeignClient的类，这时候会通过代理生成@FeignClient的类的代理类，然后赋值给实例化的类。以我们开篇示例代码来说，当BrandController类实例化时，他的成员变量BrandFeignClient也会被赋值，而这个值是通过上面讲到的beanInstance即FeignClientFactoryBean对象生成proxy代理类，从而实现Controller调用RPC远程接口。我们重点阐述下这个过程，这也是RPC技术的通用实现方式
+
+先说下如何获取到FeignClientFactoryBean对象的，代码如下
+----
+AbstractBeanFactory class
+protected <T> T doGetBean(final String beanName) throws BeansException {
+    Object sharedInstance = getSingleton(beanName);
+    Object bean = getObjectForBeanInstance(sharedInstance, name, beanName, null);
+}
+
+DefaultSingletonBeanRegistry class
+protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+    Object singletonObject = this.singletonObjects.get(beanName);
+	return singletonObject;
+}
+
+FactoryBeanRegistrySupport class
+protected Object getObjectFromFactoryBean(FactoryBean<?> factory, String beanName, boolean shouldPostProcess) {
+    object = doGetObjectFromFactoryBean(factory, beanName);
+	return object;
+}
+private Object doGetObjectFromFactoryBean(final FactoryBean<?> factory, final String beanName) {
+    object = factory.getObject();
+}
+
+FeignClientFactoryBean class
+@Override
+public Object getObject() throws Exception {
+    return getTarget();
+}
+
+FeignClientFactoryBean class
+<T> T getTarget() {
+    FeignContext context = this.applicationContext.getBean(FeignContext.class); //(1)
+    Feign.Builder builder = feign(context); //(2)
+
+    if (!StringUtils.hasText(this.url)) {
+        if (!this.name.startsWith("http")) {
+            this.url = "http://" + this.name;
+        }
+        else {
+            this.url = this.name;
+        }
+        this.url += cleanPath();
+        return (T) loadBalance(builder, context,
+                new HardCodedTarget<>(this.type, this.name, this.url));
+    }
+    if (StringUtils.hasText(this.url) && !this.url.startsWith("http")) {
+        this.url = "http://" + this.url;
+    }
+    String url = this.url + cleanPath();
+    Client client = getOptional(context, Client.class);
+    if (client != null) {
+        if (client instanceof LoadBalancerFeignClient) {
+            // not load balancing because we have a url,
+            // but ribbon is on the classpath, so unwrap
+            client = ((LoadBalancerFeignClient) client).getDelegate();
+        }
+        builder.client(client);
+    }
+    Targeter targeter = get(context, Targeter.class); //(3)
+    return (T) targeter.target(this, builder, context,
+            new HardCodedTarget<>(this.type, this.name, url)); //(4)
+}   
+----
+进到FeignClientFactoryBean.getObject()方法，关于@FeignClient类生成proxy代理类的过程就在这个方法中。这个逻辑分为四步：
+----
+1. 获取FeignContext对象
+2. 获取Feign.Builder对象
+3. 获取Targeter对象
+4. 调用Targeter.targeter()生成proxy代理类
+----
+特别说一下，在步骤2后有个挺关键的逻辑点：会以url为分线，如果没有url就会走负载均衡，反之没有。分线的意义价值在于我们可以以两种方式使用feign远程调用，一是通过url属性值直接通过`域名调用`http接口；二是通过Eureka走负载均衡调用http接口。通过url的方式可以实现快速调用，不需要依赖eureka等服务，可以直接打到目标机器，特别适合用在快速迭代场景；而负载均衡方式扩展性好，适合线上环境。
+
+针对@FeignClient类生成proxy代理类的步骤，我们每个步骤都详细阐述，如下
+
+==== @FeignClient类生成proxy代理类
+
+===== 获取FeignContext对象
+FeignClientFactoryBean.getTarget()方法(1)处所示，FeignContext对象是从beanFactory中获取的。又如下代码：FeignContext是以@Bean方法的方式声明的。
+----
+@Configuration
+public class FeignAutoConfiguration {
+	@Bean
+	public FeignContext feignContext() {
+		FeignContext context = new FeignContext();
+		context.setConfigurations(this.configurations);
+		return context;
+	}
+}
+----
+关于FeignContext对象的生成过程，参见<springboot @Configuration类的加载源码和扩展点解析>。FeignContext对象包含了
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191106171742.png[20191106171742.png]
+图中configurations属性存储了所有的@FeignClient的类即FeignClientSpecification，用于
+
+===== 获取Feign.Builder对象
+FeignClientFactoryBean.getTarget()方法(2)处通过调用feign()方法获取Feign.Builder对象，代码如下
+----
+protected Feign.Builder feign(FeignContext context) {
+    FeignLoggerFactory loggerFactory = get(context, FeignLoggerFactory.class);
+    Logger logger = loggerFactory.create(this.type);
+
+    Feign.Builder builder = get(context, Feign.Builder.class)
+            // required values
+            .logger(logger)
+            .encoder(get(context, Encoder.class))
+            .decoder(get(context, Decoder.class))
+            .contract(get(context, Contract.class));
+
+    configureFeign(context, builder);
+
+    return builder;
+}
+
+protected void configureFeign(FeignContext context, Feign.Builder builder) {
+    FeignClientProperties properties = this.applicationContext
+            .getBean(FeignClientProperties.class);
+    if (properties != null) {
+        if (properties.isDefaultToProperties()) {
+            configureUsingConfiguration(context, builder);
+            configureUsingProperties(
+                    properties.getConfig().get(properties.getDefaultConfig()),
+                    builder);
+            configureUsingProperties(properties.getConfig().get(this.contextId),
+                    builder);
+        }
+        else {
+            configureUsingProperties(
+                    properties.getConfig().get(properties.getDefaultConfig()),
+                    builder);
+            configureUsingProperties(properties.getConfig().get(this.contextId),
+                    builder);
+            configureUsingConfiguration(context, builder);
+        }
+    }
+    else {
+        configureUsingConfiguration(context, builder);
+    }
+}
+----
+如上代码，通过给Feign.Builder对象的各属性赋值从而构建对象，这些属性包括requestInterceptors、logLevel、contract、client、encoder、decoder、queryMapEncoder、options等，Feign.Builder对象负责生成@FeignClient类的proxy代理类，所以这些属性在生成proxy代理时都会用到。configureFeign()方法说明一个逻辑：有两种方式配置@FeignClient的属性值，1是properties.yml文件配置，二是使用@Configuration结合@Bean的方式。并且默认前者方式覆盖后者方式，但是可以通过配置feign.client.defaultToProperties属性值实现倒转覆盖
+
+===== 获取Targeter对象
+----
+@Configuration
+@ConditionalOnClass(name = "feign.hystrix.HystrixFeign")
+protected static class HystrixFeignTargeterConfiguration {
+    @Bean
+    @ConditionalOnMissingBean
+    public Targeter feignTargeter() {
+        return new HystrixTargeter();
+    }
+}
+----
+Targeter对象的生成同FeignContext对象的生成过程，参见<springboot @Configuration类的加载源码和扩展点解析>。这个对象的作用是判断是否配置Hystrix熔断fallback。
+===== 调用Targeter.targeter()生成proxy代理类
+FeignClientFactoryBean.getTarget()方法(4)处生成proxy代理类。代码如下
+----
+HystrixTargeter class
+public <T> T target(FeignClientFactoryBean factory, Feign.Builder feign,
+        FeignContext context, Target.HardCodedTarget<T> target) {
+    if (!(feign instanceof feign.hystrix.HystrixFeign.Builder)) {
+        return feign.target(target);
+    }
+}
+
+Feign.Builder class
+public <T> T target(Target<T> target) {
+    return build().newInstance(target);
+}
+    
+public Feign build() {
+    SynchronousMethodHandler.Factory synchronousMethodHandlerFactory =
+        new SynchronousMethodHandler.Factory(client, retryer, requestInterceptors, logger,
+            logLevel, decode404, closeAfterDecode, propagationPolicy);
+    ParseHandlersByName handlersByName =
+        new ParseHandlersByName(contract, options, encoder, decoder, queryMapEncoder,
+            errorDecoder, synchronousMethodHandlerFactory);
+    return new ReflectiveFeign(handlersByName, invocationHandlerFactory, queryMapEncoder);
+}
+
+ReflectiveFeign class
+public <T> T newInstance(Target<T> target) {
+    Map<String, MethodHandler> nameToHandler = targetToHandlersByName.apply(target);
+    Map<Method, MethodHandler> methodToHandler = new LinkedHashMap<Method, MethodHandler>();
+    List<DefaultMethodHandler> defaultMethodHandlers = new LinkedList<DefaultMethodHandler>();
+
+    for (Method method : target.type().getMethods()) {
+      if (method.getDeclaringClass() == Object.class) {
+        continue;
+      } else if (Util.isDefault(method)) {
+        DefaultMethodHandler handler = new DefaultMethodHandler(method);
+        defaultMethodHandlers.add(handler);
+        methodToHandler.put(method, handler);
+      } else {
+        methodToHandler.put(method, nameToHandler.get(Feign.configKey(target.type(), method)));
+      }
+    }
+    InvocationHandler handler = factory.create(target, methodToHandler);
+    T proxy = (T) Proxy.newProxyInstance(target.type().getClassLoader(),
+        new Class<?>[] {target.type()}, handler);
+
+    for (DefaultMethodHandler defaultMethodHandler : defaultMethodHandlers) {
+      defaultMethodHandler.bindTo(proxy);
+    }
+    return proxy;
+}
+----
+到这里，终于看到proxy的生成了。ReflectiveFeign直接负责proxy代理类的生成。从newInstance()可以看出，代理生成使用的是jdk动态代理。这个过程中，有两个类特别重要: FeignInvocationHandler和SynchronousMethodHandler。SynchronousMethodHandler是MethodHandler的子类，从名字可以看出作用，方法method对应的处理器handler，她存储的是标识了@FeignClient的类中对每个方法解析结果的存储，如图所示：
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107074325.png[20191107074325.png]
+
+FeignInvocationHandler是jdk InvocationHandler的子类，即通过它调用proxy代理类；FeignInvocationHandler类的创建采用工厂方法的形式，值得我们学习。生成代理类时，FeignInvocationHandler包裹着SynchronousMethodHandler集合传入到代理类中。生成的proxy代理类如图所示。
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107080016.png[20191107080016.png]
+
+BeanPostProcessors()) {
+			Object current = processor.postProcessAfterInitialization
+
+----
+AutowiredAnnotitionBeanPostProcessor class
+protected void inject(Object bean, @Nullable String beanName, @Nullable PropertyValues pvs) {
+    // 赋权限filed可见性，防止filed是private时导致赋值报错
+    ReflectionUtils.makeAccessible(field);
+    // 反射给属性赋值
+    field.set(bean, value);
+}
+
+		
+----
+各属性值如下图所示
+filed:
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107081652.png[20191107081652.png]
+bean:
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107081722.png[20191107081722.png]
+value:
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107081510.png[20191107081510.png]
+从而此时BrandController.brandFeignClient属性赋值完成。即BrandController.brandFeignClient=$Proxy105，从而当有http请求进入Controller方法时，即调用brandFeignClient的方法，从而进入代理类逻辑中。
+
+
+== 请求处理分析
+Feign组件已经实例化完成，同时BrandController.brandFeignClient已经被赋值完成。现在就可以应用了，当一个http请求进来时，它的逻辑也就开始了
+
+发送请求：
+----
+curl -X GET 'http://127.0.0.1:6003/brand/query?id=1&code=2'
+----
+对应的处理请求方法：
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107084916.png[20191107085101.png]
+
+可以看到，此时的brandFeignClient值时$Proxy105，即如下图所示，方法直接进入了FeignInvocationHandler.invoke方法(此处如有疑问，请看$proxy105的.class文件)。
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107085102.png[20191107085102.png]
+
+这里是我们着重说的地方，这里的逻辑是通用的，每个Feign的代理类都走这个逻辑。
+还记得FeignInvocationHandler这个类吧，生成proxy代理类小节我们重点说过，那个时候它被实例化，现在开始使用实例化时的属性值。看代码
+----
+FeignInvocationHandler class
+public Object invoke(Object proxy, Method method, Object[] args) {
+    return dispatch.get(method).invoke(args);
+}
+----
+dispatch:Map<Method, MethodHandler>类型，value为SynchronousMethodHandler,SynchronousMethodHandler存储这每个方法的信息。dispatch如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191107090336.png[20191107090336.png]
+
+看代码
+----
+SynchronousMethodHandler class
+public Object invoke(Object[] argv) throws Throwable {
+    // 将BrandFeignClient.query()方法转化为包含http请求信息RequestTemplate对象，如下图
+    RequestTemplate template = buildTemplateFromArgs.create(argv);
+    Retryer retryer = this.retryer.clone();
+    while (true) {
+        try {
+            return executeAndDecode(template);
+        } catch (RetryableException e) {
+           // 重试逻辑
+        }
+    }
+}
+----
+方法分两步
+第一步：
+将@FeignClient类的方法转化为包含http请求信息RequestTemplate对象，如图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191108073006.png[20191108073006.png]
+
+第二步：组装并发送request请求，处理response响应数据
+----
+  Object executeAndDecode(RequestTemplate template) throws Throwable {
+    // 组装成request请求，
+    Request request = targetRequest(template);
+
+    if (logLevel != Logger.Level.NONE) {
+      logger.logRequest(metadata.configKey(), logLevel, request);
+    }
+
+    Response response = client.execute(request, options);
+}
+
+----
+方法首先会组装成request请求，会经过RequestInterceptor拦截处理，这就给了我们扩展的机会。这里我们实际开发中可以继承RequestInterceptor实现我们的逻辑，如处理Get方式的request body数据。然后是根据日志级别记录日志，这里给我的启示为，我们平时开发中记录日志可以向这样封装处理。
+
+最后是使用LoadBalanceFeignClient(这是feign默认使用的FeignClient)，他结合ribbon和eureka实现负载均衡，根据ribbon的算法找到一台远程服务，最后是发送请求，得到响应数据。ribbon负载均衡详见网上文档
+
+到这里，整个feign组件的加载解析，以及请求处理都完事了，花了3天时间，难免有疏漏
+
+
+=== 标注了@FeignClient的类实例化过程总结
+一个java .class文件在spring boot中的转化过程
+.class-->BeanDefinition-->beanInstance-->proxy代理类
+
+----
+beanDefinition在beanFactory的存储位置：
+DefaultListableBeanFactroy.beanDenifitionNames.add(beanName);
+DefaultListableBeanFactroy.beanDenifitionMap.put(beanName, BeanDefinition);
+beanName:com.ke.utopia.construction.api.ConstructionStoppageFeignService
+BeanDefinition:GenericBeanDefinition(beanClass=class org.springframework.cloud.openfeign.FeignClientFactoryBean))
+
+
+beanInstance在beanFactory的存储位置：
+DefaultSingletonBeanRegistry.singletonObjects.put(beanName, beanInstance);
+beanName:com.ke.utopia.construction.api.ConstructionStoppageFeignService
+beanInstance:FeignClientFactoryBean(type=interface com.ke.utopia.construction.api.ConstructionStoppageFeignService)
+
+proxy代理类在beanFactory的存储位置：
+不会放入beanFactory，而是直接赋值给引用它的属性
+----
+
+关于feign的使用参见
+https://segmentfault.com/a/1190000020656405
+https://juejin.im/post/5c6fb8b7518825629b42f572
+
+
+随时小问
+1. feign是如何支持图片等流数据的
+2. feign的encoder和decoder原理
+3. feign的constract作用
+4. feign方法入参为什么必须加上注解
+5. feign GET请求入参不支持对象方式接收
+

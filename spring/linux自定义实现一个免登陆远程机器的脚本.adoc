@@ -14,3 +14,131 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+通过本篇阅读，你的收获如下
+
+== 你的收获
+1. 学会自定义linux命令运行
+2. 诱使你学习bash脚本的简单语法
+3. 学到ssh config相关概念
+4. 动手才是深入理解的绝招
+
+
+== 故事场景
+平时开发过程中，登陆远程linux机器是一定会发生的。正常我们的操作步骤如下
+----
+1. 打开iTerm2
+2. ssh root@50.100.11.10
+3. 输入密码
+----
+实际工作中有多个远程服务器，需要连接。每个都要如上操作一遍，实在繁琐。尤其是复杂密码的时候
+
+== 方法一 使用ssh config 
+> 这是稍友好一点的方式
+
+实现密码登录的方法是通过`openssh` 的`ssh config`的功能。具体操作为~/.ssh/config，如果不存在，可能新建一个
+然后`vim ~/.ssh/config`
+----
+Host aliyun
+  HostName 50.100.11.10
+  User root
+  Port 22
+----
+保存退出。这时在*iTerm2*中就可以输入`ssh aliyun`,回车 然后输入密码。注意，这时候已经不用输入ssh root@50.100.11.10，只要输入密码就登录上了。<font color=green>这种方式的麻烦之处是还要使用密码，尤其是密码很难记忆的时候，每次都要去某个地方找一通</font>
+
+=== 设置免密登录
+> 这是稍稍友好一点的方式
+
+方法是使用`ssh-copy-id`功能，原理是将本机的密钥复制到远程要连接的机器上，从而授权连接。iterm终端输入：
+
+> $ ssh-copy-id -i user@192.168.1.101
+这样就可以密码登录了。<font color=green>这种方式的缺点在于你本机的密钥会传到远程的机器上。试想一下，测试环境机器很多人共用，你的密钥对其他人就是可见的了，不够安全</font>
+
+基于此，自定义一个免登陆的脚本。相当于项目初始化操作
+
+== 方法二 自定义一个免登陆的脚本
+
+=== 实现原理
+原理其实很简单，在脚本汇总预先配置好远程机器的ip和密码，结合linux pbcopy ssh等命令实现免密登录。功能很简单，也可以作为熟悉和练习linux bash的入门例子。具体如下
+
+
+=== step0 创建文件所在的目录
+----
+ skyler@bogon ~ pwd
+/Users/skyler
+ skyler@bogon ~ mkdir bin
+ skyler@bogon ~ cd bin
+ skyler@bogon ~/bin pwd
+/Users/skyler/bin
+----
+定义名称为bin的文件夹是有原因的。正常我们执行文件是这样了：sh xxxx。我们想像java这样执行。所以我们要在系统配置文件里配置这个目录
+
+=== step1 创建文件
+创建一个文件:auth，执行这个文件实现免登陆
+----
+skyler@bogon ~/bin touch auth
+----
+
+=== step2 文件赋予执行权限
+----
+skyler@bogon ~/bin chmod u+x auth
+----
+=== step3 编写脚本
+----
+skyler@bogon ~/bin vim auth
+# !/bin/bash
+# author skyler
+# get ssh value from ssh key
+# 这里演示的命令：read, test, if else, echo, pbcopy, ssh, 定义变量
+
+echo "主机别名:liantiao dev"
+
+read -p "^V^ 请输入您要连接的主机别名:" hostName
+
+function noMatchTip() {
+   echo "sorry 没有找到$1的密码"
+}
+
+if test $hostName == "liantiao" ; then
+   sk="qdfgdgdf"
+elif test $hostName == "dev" ; then
+   sk="dfgdfg"
+else
+   noMatchTip ${hostName};
+fi
+
+outMsg="$hostName"
+echo "$sk" | pbcopy
+echo "你要连接机器的别名:$outMsg, mac请按下Cmd+v"
+
+if [ $hostName == "liantiao" ]; then
+   ssh work@10.100.20.11
+elif [ $hostName == "dev" ]; then
+   ssh root@50.98.100.10
+else
+   noMatchTip ${hostName};
+fi
+----
+保存文本退出
+
+=== step4 目录添加到系统配置文件中
+为了能让auth成为全局命令，需要将`/Users/skyler/bin`添加到系统配置文件中，对于我的mac，因为我使用了oh-my-zsh，所以需要将目录放到`~/.zshrc`，具体如下
+----
+skyler@bogon ~ vim ~/.zshrc
+export PATH=${PATH}:/Users/skyler/bin
+----
+重新加载~/.zshrc
+----
+skyler@bogon ~ source ~/.zshrc
+----
+
+=== step5 运行命令
+----
+skyler@bogon ~ auth
+----
+选择输入你要连接的服务器,然后cmd+v，然后就会连接到远程服务器了。到此免密登录实现。当然，你还可以根据自己的需求稍微改动，如不显示登录密码、简化选择服务器操作。这是你的事了
+
+== 总结
+整个下来，你会发现，其实很简单，但是对提供工作效率却是起到很大作用。实际工作中，你会发现，文章开始的连接操作，虽然每次连接都要操作几步和输入密码的麻烦操作，但是他还是能连上远程，同样能看日志，查问题。所以很多人日复一日的这么做。他们不聪明吗，他们也不笨。但可能被生活折磨的没有精力了吧。但进取的心还是要有的，能提供工作效率的操作就要去做，哪怕是这么小的点
+
+我刚刚升p7失败，平时的努力工作精力和内容经过我的笨嘴巴拉巴拉后，没有表达出来，自然就晋升失败了。短暂的伤心后，还是要给自己动力。所以，不管啥时候，不要被生活的折磨和工作的困难屈服，付出总会有收获。

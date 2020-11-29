@@ -14,3 +14,67 @@
 :icons: font
 
 Doc writer yaoyihao1@gmail.com
+
+== 前提
+如果你已经很了解`spring framework中bean生成的原理和过程`，本文向你展示了一个精简版和可视化图谱；如果你很想了解bean生成的过程，本文提供你梯子快速的走入bean生成的原理和实现细节。减少你花费的时间
+
+== 名词解析
+1. 入口：直接定位到一个功能实现的开始处，节省寻找定位花费的时间
+
+== 知识点收获
+通过本文，你能收获什么？
+1. .class文件生成beanDefinition的入口
+2. beanDefinition生成beanInstance的入口
+3. beanInstance生成proxy代理类的入口
+4. 如何直接debug指定bean的创建流程
+
+> 》本文力求专注和精简，希望你有所收获和想法
+
+我们都知道，`spring framework`震架之宝之一:IOC，将bean的创建和销毁交由spring容器，那么bean在创建的路上都要经过哪些路途呢，又是怎么放入spring容器的呢。我们顺着下面的轴线开始
+
+> `.class-->beanDefinition-->beanInstance-->proxy类`
+
+首先看一张图，下图展示了`.class文件生成beanDefinition 与 beanDefinition生成beanInstance 与 beanInstance生成proxy代理类的入口`，有了此图，走源码时可以结合debug直接定位你要关注的细节。节省你和你寻找的知识点见面的时间
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191201103033.png[20191201103033.png]
+
+
+== 示例
+为了我们定义一个简单的Service接口和实现类
+----
+@Service
+public class UserServiceImpl implements IUserService {
+	@Override
+	public int insert(User user) {}
+}
+----
+
+
+== 正文
+开始看到`spring容器中bean创建分成4个节点，三个阶段`。如上轴线所示
+
+=== bean在.class-->beanDefinition阶段
+如果bean是我们项目中定义的`@Component`类，如示例`UserServiceImpl`类。它的加载和生成beanDefinition要感谢`@ComponentScan`这个注解，当然更要感谢真正发挥作用的`ClassPathBeanDefinitionParser`类它的`doScan(basePackages)`承担了这个阶段的功能实现。
+
+=== bean在beanDefinition-->beanInstance阶段
+这个阶段的功能实现一定要感谢`AbstractAutowireCapableBeanFactory`，记住这个常常的名字，因为每个bean的实例化都是他的功劳。它的`createBean(beanName, RootBeanDefinition,args)`方法如这个阶段的入口。入口内做了三件事
+1. 生成beanInstance，即bean对象本尊
+此功能由`createBeanInstance(beanName, RootBeanDefinition,args)`负责
+2. 向bean的beanDefinition赋属性和值
+此功能由`populateBean(beanName, RootBeanDefinition,BeanWrapper)`负责
+3. 如果满足条件，beanInstance生成Proxy代理类
+此功能由`AbstractAutoProxyCreator.postProcessAfterInitialization(Object bean, beanName)`，原理是应用`BeanPostProcessor的post-processor模式`完成
+
+=== bean在beanInstance-->proxy代理类
+正如第二阶段第三件事做的事情
+
+== it`s time to summary
+到这里，本文就说完了。篇幅很短，深度不深，细节不细。这正是本文的目的：剥离繁杂，直击目标。通过本文，你能清晰的知道: `spring容器创建bean`的道路上，有哪些关键节点，节点处发生了什么，何时发生的。到这你会问，怎么发生的你咋没说啊。是的，这里没说，原因是它会篇幅很长，对你整体把握`spring容器创建bean`不利。我想像剥洋葱一样一层一层深入，扎实清晰。
+
+如果本文带给你兴趣了，那么深入剥洋葱这个事儿，你也可以开始了
+
+最后附上spring容器管理bean的生命周期图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191201231917.png[20191201231917.png]
+
+最后的最后，一个飞猫 relax us
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/%E9%A3%9E%E7%8C%AB.png[飞猫.png]
