@@ -1,0 +1,112 @@
+= jvm怎么运行springboot jar文件的
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210418221832.png[20210418221832]
+
+== 前提
+
+关于springboot的类加载原理和`spring-boot-loader`的源码解析，网上已有很多的很棒的文章了。我一直相信对于技术原理的获取，代码层面的话一定是动眼比不上动手，`debug`跟着源码运行走一遍，效果往往是很棒的。同理，对于`spring-boot-loader`的原理，源码的掌握，其原理和`debug`方式参考： https://juejin.cn/post/6844904088707186701[springboot jar包可运行,debug告诉你怎么运行的]
+
+本文想要讲述的可能要更近一步了。带着一些疑问开始我们的学习
+- 1、程序是从哪进入`JarLauncher.main()`方法的
+- 2、`java -jar xxx-executable.jar` `java`有什么规定吗
+- 3、`jvm`层面是如何进入到`java`程序的，连接点在哪里
+
+> 本文力求专注和精简，希望你有所收获和想法
+
+== 正文
+
+=== `-jar`的规矩
+其实，`java`对`-jar`定义了一些规则，只要符合这个规则，你做啥都行，怎么做都行。其中的一个是:`jar`中需要一个`META-INF/MAINFEST.MF`文件，且文件中`Main-Class manifest header`。官网的说明如下
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417141240.png[20210417141240]
+
+所以，我们解压一个`xxx-executable.jar`，会看到`META-INF/MAINFEST.MF`的文件及其内容
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417141952.png[20210417141952]
+
+正是因为有了`Main-Class: org.springframework.boot.loader.JarLauncher`，所以，当`java -jar xxx-executable.jar`时，程序会进入`org.springframework.boot.loader.JarLauncher`执行`main`方法。到这里我又有了疑问，那是从哪进入`JarLauncher.main`方法的呢
+
+== 程序是怎么进入`JarLauncher.main`方法的呢
+这个时候想到了`jvm`。应该是从`jvm`进去到了`JarLauncher.main`，那么怎么验证呢。
+
+我们通过`CLion`查看`jvm`源码，试图找到这个答案。我们通过全局搜索`Main-Class`,`Manifest` 这些关键词来定位所在的文件，并打上相应的`debug`端点。如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417144256.png[]
+
+然后我们启动`debug`模式启动`jvm`，启动时配置上我们的应用`jar`包：`-jar xxx-executable.jar`，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417144842.png[20210417144842]
+
+
+现在我们跟着`jvm`的`debug`一起追下寻找`Main-Class`,`Manifest` 的过程。
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417162905.png[20210417162905]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417162932.png[20210417162932]
+
+看到了`JLI_ParseManifest`，从名字也看的出来这个眉目了
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417171349.png[20210417162933]
+
+可以看到`static const char *manifest_name = "META-INF/MANIFEST.MF"`在jvm中是个常量。所以，我们的应用`xxx-executable.jar`中必须有个叫这个名的目录和文件。方法接着解析了这个文件，文件的内容和我们解压`xxx-executable.jar`看到的内容一致，如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417172247.png[]
+所以，到这`Main-Class`的值就被解析出来了。下面我们看下jvm如何加载`Main-Class`的值(即o`rg.springframework.boot.loader.JarLauncher`)的。
+
+
+下面图中6个部分其实将虚拟机的整个初始化和加载过程都显示出来了。在这里我们只关注`JarLauncher`是如何加载初始化与`JarLauncher.main`是怎么运行的，所以我们重点关注(1)、(2)、(4)、(6)
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417175150.png[]
+
+
+=== （1）`LoadMainClass` - 加载`main class`
+我们先看下`LoadMainClass`的细节，看看她咋加载的。通过`GetLauncherHelperClass`方法，我们终于看到了熟悉的身影：`sun/launcher/LauncherHelper` 这个`java class`。如下图
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417181757.png[20210417181757]
+
+`LoadMainClass`做了三件事：
+1、获取`LauncherHelper`实例
+2、通过`checkAndLoadMain`方法使用`ClassLoader.getSystemClassLoader`初始化`org.springframework.boot.loader.JarLauncher class`
+3、`makePlatformString`获取`utf-8`后的`string`
+
+需要特别指出的是`LauncherHelper.java`。这个类的源码在`jvm`中，在我们熟悉的`rt.jar`是以`.class`的形式出现的。我把他俩放在一张图片里对比下
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417185738.png[20210417185738]
+
+=== （2）获取`LauncherHelper`的实例
+这里的实例是在(1)中初始化好的，用就好了
+
+=== （4）验证和加载`main`方法
+这里用了类似反射的方法来获取`main`方法
+
+=== （6）调用`LauncherHelper.main`方法
+这里就是我们一直要知道的那个地方，也是文章开头部分的问题1和3的答案。即`jvm`运行和`java application`的连接点。利用`CLion`和`Idea`，利用`debug`，我人为的把他俩的运行结合在一起，具象的表示出这两个点的运行，如下图
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417201624.png[20210417201624]
+
+
+== it`s time to summary
+
+到这里，我们的疑问都找到答案了。我们从`jvm`源码到`java`代码，整个流程串下来。相信有人再问你`springboot`的入口时，你不仅知道了是`JarLauncher.main`，而且能进一步知道从哪(怎么)进入的`JarLauncher.main`的。这不管是对工作，还是面试，对你都是有很大收益的。
+
+
+== 附录
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417192215.png[20210417192215]
+
+
+所有，从`jvm`到`springboot`，再到应用`app`的入口，我们现在都知道了。
+```
+java.c的JavaMain方法 --> LauncherHelper.java的main方法 --> Application.java的main方法
+```
+
+收益文章： https://programmer.ink/think/why-the-jar-of-springboot-can-run-independently.html[why-the-jar-of-springboot-can-run-independently]
+
