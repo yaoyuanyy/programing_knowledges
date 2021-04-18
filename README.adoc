@@ -2,6 +2,7 @@
 = 编程知识草集站
 
 == java
+- https://github.com/yaoyuanyy/programing_knowledges/blob/master/java/jvm%E6%80%8E%E4%B9%88%E8%BF%90%E8%A1%8Cspringboot%20jar%E6%96%87%E4%BB%B6%E7%9A%84.adoc[jvm怎么运行springboot jar文件的]
 - https://github.com/yaoyuanyy/programing_knowledges/blob/master/java/%E5%85%AC%E5%8F%B8%E5%BE%AE%E6%9C%8D%E5%8A%A1%E5%86%85%E6%88%91%E7%9A%84%E6%9C%8D%E5%8A%A1%E6%8E%A5%E5%8F%A3%E9%83%BD%E8%B0%81%E5%9C%A8%E8%B0%83%E7%94%A8%E5%91%A2%EF%BC%9F%E8%BF%98%E5%9C%A8%E8%84%91%E5%8A%9B%E8%AE%B0%E5%90%97.adoc[公司微服务内我的服务接口都谁在调用呢？还在脑力记吗？]
 
 - https://github.com/yaoyuanyy/programing_knowledges/blob/master/java/%E6%9F%A5%E7%9C%8B%E8%BF%9C%E7%A8%8Bjava%E6%9C%8D%E5%8A%A1%E7%9A%84system%20properties%E7%9A%84%E6%89%80%E6%9C%89%E6%96%B9%E5%BC%8F%E6%96%B9%E6%B3%95.adoc[查看远程java服务的system properties的所有方式方法]
