@@ -151,7 +151,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417192215.png[20210417192215]
 
 
-现在，从 `jvm` 到 `java` ，又从从 `java` 到 `springboot ` ，我们都知道了；又前一篇讲了 从 `springboot` 到 `应用app程序` 的入口和连接点。所有，现在，从jvm到应用app程序的整个过程我们都知道了，如下
+现在，从 `jvm` 到 `java` ，又从从 `java` 到 `springboot` ，我们都知道了；又前一篇讲了 从 `springboot` 到 `应用app程序` 的入口和连接点。所有，现在，从jvm到应用app程序的整个过程我们都知道了，如下
 
 ```
 java.c的JavaMain方法 --> LauncherHelper.java的main方法 --> JarLauncher.java的main方法 -->  Application.java的main方法
