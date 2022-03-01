@@ -106,10 +106,12 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/201
 
 前者加载过程同spring boot所有组件加载的逻辑，正如图一所示；而后者是采用`feign`自己的加载方式。当然两者加载过程开始部分是一样的。即从`springApplication.run()`到`ConfigurationClassPostProcessor.processConfigBeanDefinitions()`是相同的，也是所有`spring boot`项目启动加载共用的逻辑。但是从`processConfigBeanDefinitions()`方法内开始变得不同了。`FeignAutoConfiguration类和FeignClientsConfiguration类`的加载开始于方法内`315行的parser.parse(candidates)`,而`@EnableFeignClients和@FeignClient`的加载开始于`327行的this.reader.loadBeanDefinitions(configClasses)`。其实，从另一角度可以说`FeignAutoConfiguration类和FeignClientsConfiguration`类的加载是通用的，`@EnableFeignClients和@FeignClient`的加载是特殊的，是从通用的某一个点拉出去的分支。所以特殊的是在通用的基础上进行的。从两个不同点进入到各自具体的`.class-->BeanDefinition`的加载过程。同样的目的，只是使用不同的方式。下面我们详细说下两种加载的源码和原理
 
-NOTE::值得注意的是，这两种加载方式都是<font color=green>我们实际开发过程中的扩展点：.class转化为beanDefiniton的代码过程</font>。重写他们以完成我们自己实际的逻辑
+[NOTE]
+值得注意的是，这两种加载方式都是 *我们实际开发过程中的扩展点：.class转化为beanDefiniton的代码过程*。重写他们以完成我们自己实际的逻辑
 
 ==== FeignAutoConfiguration类和FeignClientsConfiguration类等
 前面说到，他们的加载开始于ConfigurationClassPostProcessor.processConfigBeanDefinitions()方法的`315行: 的parser.parse(candidates)`。我们就从这里说起
+
 ----
 public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
     List<BeanDefinitionHolder> configCandidates = new ArrayList<>();
@@ -201,7 +203,7 @@ private void registerDefaultConfiguration(AnnotationMetadata metadata,
 }
 ----
 
-<font color=green>这里我们实际开发中的扩展点为:</font>引入@EnableFeignClients时，可以自定义它的defaultConfiguration属性的值，从而实现我们自己关于Feign的配置。如重写Feign请求响应信息的加密解密、fallback、fallbackFactory等
+*这里我们实际开发中的扩展点为* 引入@EnableFeignClients时，可以自定义它的defaultConfiguration属性的值，从而实现我们自己关于Feign的配置。如重写Feign请求响应信息的加密解密、fallback、fallbackFactory等
 
 我们重点看registerFeignClients()方法的逻辑：加载标注了@FeignClient的.class文件，解析并获取符合条件的class，生成BeanDefinition，放入spring beanFactory容器。代码如下
 
@@ -266,10 +268,13 @@ public void registerFeignClients(AnnotationMetadata metadata,
 ----
 
 为搜索到符合条件的@FeignClient的类，此方法分两步
+
 1. 首先，确定要搜索的package目录
 2. 其次，从这些package目录下获取和解析@FeignClient的类
 
-方法分三个情况来确定package包目录：优先从@EnableFeignClients.clients获取属性值，从而确定package目录；第二优先级从EnableFeignClients的属性value、basePackages、basePackageClasses获取属性值，从而确定package目录；最后优先级从@EnableFeignClient所在的类的package，从而确定package目录。
+方法分三个情况来确定package包目录：
+
+优先从@EnableFeignClients.clients获取属性值，从而确定package目录；第二优先级从EnableFeignClients的属性value、basePackages、basePackageClasses获取属性值，从而确定package目录；最后优先级从@EnableFeignClient所在的类的package，从而确定package目录。
 
 确定了package目录后，开始加载package包目录下标注了@FeignClient的.class文件。加载.class文件使用的是ClassPathScanningCandidateComponentProvider类，这个类的resourceLoader变量提供classLoader来加载.class文件；同时includeFilters变量标识要将哪些类转化为BeanDefinition。最后将BeanDefinition放入spring BeanFactory容器。为了尽量不扰乱feign部分，加载.class及转化为BeanDefinition这里不阐述，详细代码见ClassPathScanningCandidateComponentProvider.scanCandidateComponents()方法
 
