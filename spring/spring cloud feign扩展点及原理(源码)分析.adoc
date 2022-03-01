@@ -42,7 +42,7 @@ Doc writer yaoyihao1@gmail.com
 5. 自定义@EnableXXX组件，解决其他的问题
 ----
 
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191109101703.png[20191109101703.png]
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191109101703.png[20191109101703.png]
 
 
 == 示例
@@ -78,6 +78,7 @@ public interface BrandFeignClient {
     ResultDTO<List<BrandDto>> query(@RequestParam("id") Long id, @RequestParam("code") String code);
 }
 ----
+
 == feign关键组件类
 先列出`feign关键`的地方，你有个大概印象，进行源码分析时希望你能有意识的`重点照顾`这些关键点。
 
@@ -93,7 +94,7 @@ public interface BrandFeignClient {
 == feign代码加载原理
 下图是spring boot所有项目加载@Configuration的类时都要走的路径(除了FeignClientsRegistrar)。参见<springboot @Configuration类的加载源码和扩展点解析>
 
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191102190916.png[图一]
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191102190916.png[图一]
 
 
 
