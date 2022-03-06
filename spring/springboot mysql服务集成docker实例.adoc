@@ -16,6 +16,7 @@
 Doc writer yaoyihao1@gmail.com
 
 == 回顾
+
 上篇笔者实战操作了< https://yaoyuanyy.github.io/2019/05/22/springboot%E9%9B%86%E6%88%90docker%E5%AE%9E%E4%BE%8B/[springboot集成docker] >从0开始的操作例子，本篇再深入一点：把mysql继承进来，形成springboot+mysql服务集成docker实例，本篇是在上篇< (https://yaoyuanyy.github.io/2019/05/22/springboot%E9%9B%86%E6%88%90docker%E5%AE%9E%E4%BE%8B/[springboot集成docker]>的基础上进行的
 
 项目代码: https://github.com/yaoyuanyy/springboot_project/tree/feature-docker-20190517/springboot_mybatis[springboot_mybatis]
@@ -177,6 +178,7 @@ public class UserServiceImpl implements IUserService {
 === 构建项目并发到docker服务器
 
 项目根路径下执行：`mvn clean package docker:build -DskipTests`，将项目打包发到docker服务器上。控制台提示build success后，登录远程docker 服务器看见新传上来的image 镜像，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129145936.png[20201129145936]
 
 === docker运行mysql image
@@ -192,11 +194,13 @@ $ docker run -d -t --name mybatis-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_
 # -e 为这个容器设置环境变量
 ----
 运行命令后，查看产生的container的状态，可以看到状态为Up，表明mysql已经启动，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150116.png[20201129150116]
 
 
 === docker运行springboot_mybatis项目
 现在我们可以运行刚刚上传的项目(springboot_mybatis)了。
+
 ----
 $ docker run -d -t --name demo-springboot-docker --link mybatis-mysql:mysql -p 2372:2371 -e DATABASE_HOST=mybatis-mysql -e DATABASE_PORT=3306 -e DATABASE_NAME=jdbc_test -e DATABASE_USER=root -e DATABASE_PASSWORD=root123 springboot_demo/springboot_mybatis
 
@@ -205,15 +209,20 @@ $ docker run -d -t --name demo-springboot-docker --link mybatis-mysql:mysql -p 2
 # -p 指定启动的container暴露的端口号，2372:2371指定为springboot_demo/springboot_mybatis仓库产生的container的端口号为2372，冒号后面的2371为springboot_mybatis web项目的端口，冒号起到映射的作用，即docker 容器的2372端口映射到web项目的2371端口
 # 注意-e 后面数据库配置的value和启动mysql镜像时设置的一致
 ----
+
 运行命令后你可能得到一个错误，如下图，意思为依赖的mybatis-mysql容器不是运行状态，docker ps -a你会发现mybatis-mysql是Exited状态
+
 ----
 docker: Error response from daemon: Cannot link to a non running container: /mybatis-mysql AS /demo-springboot-docker/mysql
 ----
+
 为解决这个问题，执行命令：`docker start mybatis-mysql`，然后`docker ps -a` 查看mybatis-mysql启动了。
 再次执行启动springboot_demo/springboot_mybatis仓库的命令。如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150223.png[20201129150223]
 
 没有报错，但是我们不知道springboot_mybatis这个web项目是否启动成功，所以我们会想看下web项目的启动日志。这时进行如下步骤，首先执行`docker ps`查看正在运行的container，找到我们springboot_demo/springboot_mybatis image对应的containerId，然后执行`docker logs -f -t --tail 20 containerId`，containerId替换为刚才找到的containerId。回车就可以看到springboot_mybatis的日志了，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150252.png[20201129150252]
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150335.png[20201129150335]
@@ -223,6 +232,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 ----
 $ curl http://localhost:2372/user/findById?id=3
 ----
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129150411.png[20201129150411]
 
 到这里，docker集成springboot+mysql是搭建完成了。但是加入springboot_mybatis不仅依赖mysql，还有redis mongodb，nginx ···，多个组件时，如果每个组件都要docker run ···，你会疯掉的。这时docker-compose解决了这个问题。下面我们在此基础上使用docker-compose集成springboot_mybatis+mysql。
@@ -283,6 +293,7 @@ scp springboot_mybatis-0.0.1-SNAPSHOT.jar root@48.99.190.38:/root/skyler_home/pr
 
 ----
 现在docker_compose目录下文件如下
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151118.png[20201129151118]
 
 
@@ -303,15 +314,20 @@ $ docker-compose up
 可能会报错，如下图
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151236.png[20201129151236]
+
 而且springboot-mybatis和mysql container已经创建了，但是状态是Exited
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151322.png[20201129151322]
 
 
 ==== 报错原因
+
 1. mysql container状态是Exited的原因:
 为docker-compose.yml中`MYSQL_USER=root`。此docker镜像使用您提供的密码创建root用户，因此当您想再次创建root用户时，它会失败并关闭容器。只需将其更改为`MYSQL_USER=myuser`即可
+
 2. springboot-mybatis启动失败的原因:
 本质是docker-compose的启动顺序问题。springboot-mybatis依赖mysql, 在docker-compose.yml中，通过配置depends_on, links, volumes_from, 以及 network_mode: "service:...".可以控制服务的启动顺序，但是却不能知道被依赖的服务是否启动完毕，在一个服务必须要依赖另一个服务完成的时候，这样就会有问题。从springboot-mybatis启动日志也可以看出demo-springboot-docker_1先于mybatis-mysql_dev初始化了
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151426.png[20201129151426]
 
 ==== 解决办法
@@ -322,6 +338,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 2、同步等待，使用 wait-for-it.sh或者其他 shell脚本将当前服务启动阻塞，直到被依赖的服务加载完毕。这种方案后期可以尝试使用
 
 这里我们使用第一种。具体操作：编辑docker-compose.yml，新增restart: always。docker-compose.yml全内容为：
+
 ----
 version: '3.3'
 
@@ -357,8 +374,10 @@ services:
 使用`docker logs -f -t --tail 20 62617312c8bf`看日志，你会发现，失败之后自动重启，最后显示服务启动成功
 
 
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151519.png[20201129151519]
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151519.png[20201129151519]
+
 使用docker-compose ps(类似docker ps -a)查看container的状态为Up
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151556.png[20201129151556]
 
 
@@ -378,6 +397,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 -t, --tty            Allocate a pseudo-TTY
 
 如：`docker exec -it 62617312c8bf /bin/bash`，这个命令是进入容器62617312c8bf内部打开shell，ll 可以看到容器的目录结构，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129151719.png[20201129151719]
 
 `Ctrl + d` 退出

@@ -42,44 +42,55 @@ TLS（Transport Layer Security，传输层安全）：其前身是 SSL，它最�
 === 2.2 TCP的3次握手和HTTP 访问过程
 ==== 2.2.1 TCP的3次握手
 客户端输入URL回车，DNS解析域名得到服务器的IP地址，服务器在80端口监听客户端请求，端口通过TCP/IP协议（可以通过Socket实现）建立连接。HTTP属于TCP/IP模型中的运用层协议，所以通信的过程其实是对应数据的入栈和出栈。
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401093933.png[20200401093933.png]
 
 报文从运用层传送到运输层，运输层通过TCP三次握手和服务器建立连接，四次挥手释放连接。
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401093945.png[20200401093945.png]
 
 分析下这个三次握手的过程：
+
 ----
  第一次握手：主机A发送位码为syn＝1,随机产生seq number= X的数据包到服务器，主机B由SYN=1知道，A要求建立联机；
  第二次握手：主机B收到请求后要确认联机信息，向A发送syn=1，ack number= X+1 ，随机产生seq=Y的包
  第三次握手：主机A收到后检查ack number是否正确，即第一次发送的X+1,以及位码SYN是否为1；若正确，主机A会再发送ack number=(Y+1), Seq = z，主机B收到后确认seq值与ack=1则连接建立成功。
  完成三次握手，主机A与主机B开始传送数据。
 ----
+
 ==== 2.2.2 HTTP 访问过程
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401093959.png[20200401093959.png]
 
 抓包如下：
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094006.png[20200401094006.png]
 
 如上图所示，HTTP请求过程中，客户端与服务器之间没有任何身份确认的过程，数据全部明文传输，“裸奔”在互联网上，所以很容易遭到黑客的攻击，如下：
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094017.png[20200401094017.png]
 
 
 可以看到，客户端发出的请求很容易被黑客截获，如果此时黑客冒充服务器，则其可返回任意信息给客户端，而不被客户端察觉，所以我们经常会听到一词“劫持”。所以 HTTP 传输面临的风险有：
+
 ----
  （1） 窃听风险：黑客可以获知通信内容。
  （2） 篡改风险：黑客可以修改通信内容。
  （3） 冒充风险：黑客可以冒充他人身份参与通信。
 ----
+
 === 2.3 安全通信三原则和https的设计思路
 ==== 2.3.1 确保安全通信的三个原则
 ===== A.数据内容的加密
  这个很好理解是吧，敏感信息肯定要加密的，明文传输等于自杀。不过多解释了。
+
 ===== B.通讯双方的身份校验
  这个很多人不理解，这是啥意思，按道理说我们用非对称加密应该就完美了啊。但是谨记我们的数据包不是从A直接到B的。
 
  中间要经过无数次的路由器转发等等，这个中间一旦有人截获了我们的数据包，换成自己的数据包，就很危险了。
 
  所以我们还需要一种机制能校验通讯双方的身份。确保我是在和我老婆说话 而不是在我和丈母娘说话。
+
 ===== C.数据内容的完整性
  这个也不是很容易理解，按道理说TCP是能保证数据有序完整的到达对方的。但是不要忘记中间我们经过的无数次路由器转发，
  可能被劫持，被劫持以后可能会对数据包进行篡改，这个时候我们需要一种机制保护我们的数据不被篡改，即使被篡改也能被我们察觉，确保我对我老婆写的信能完整的让我老婆看到，而不是只看到一半。
@@ -98,6 +109,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 中间人可以将服务器发送的公钥包进行掉包，客户端怎么知道这个公钥是真的服务器发送的还是假的中间人给的非法公钥呢？
 
 可以看这张图，基本上中间人攻击就是这个图所示的意思。
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094047.png[20200401094047.png]
 
 那有没有一种方式既可以安全的获取公钥，又能防止黑客冒充呢？ 那就需要用到终极武器了： https://cloud.tencent.com/product/ssl?from=10680[SSL证书申购了]
@@ -106,16 +118,18 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 具体步骤说明：
  如上图所示，在第 ② 步时服务器发送了一个SSL证书给客户端，SSL 证书中包含的具体内容有：
- ----
+ 
+----
  （1）证书的发布机构CA
  （2）证书的有效期
  （3）公钥
  （4）证书所有者
  （5）签名
- ………
- ----
+----
+
  客户端在接受到服务端发来的SSL证书时，会对证书的真伪进行校验，以浏览器为例说明如下：
- ----
+
+----
  （1）首先浏览器读取证书中的证书所有者、有效期等信息进行一一校验；
  （2）浏览器开始查找操作系统中已内置的受信任的证书发布机构CA，与服务器发来的证书中的颁发者CA比对，用于校验证书是否为合法机构颁发；
  （3）如果找不到，浏览器就会报错，说明服务器发来的证书是不可信任的；
@@ -124,6 +138,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
  （6）对比结果一致，则证明服务器发来的证书合法，没有被冒充；
  （7）此时浏览器就可以读取证书中的公钥，用于后续加密了；
 ----
+
 所以通过发送SSL证书的形式，既解决了公钥获取问题，又解决了黑客冒充问题，一箭双雕，HTTPS加密过程也就此形成。
 
 所以相比HTTP，HTTPS 传输更加安全：
@@ -132,11 +147,12 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
  （2） 具有校验机制，一旦被篡改，通信双方会立刻发现。
  （3） 配备身份证书，防止身份被冒充。
 ----
+
 ==== 2.3.3 加密知识普及
 ===== 1、对称加密
 
- 有流式、分组两种，加密和解密都是使用的同一个密钥。
- 例如：DES、AES-GCM、ChaCha20-Poly1305等。
+有流式、分组两种，加密和解密都是使用的同一个密钥。
+例如：DES、AES-GCM、ChaCha20-Poly1305等。
 
 【戏说】
 
@@ -218,37 +234,44 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 ==== 2.4.2 用WireShark还原一次HTTPS的交互过程
 目标访问地址就用github吧。 抓出来是这样的。
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094338.png[20200401094338.png]
 
 注意看tlsv1的就可以了这个就是加密层。下面就来逐步分析：
  (1) ClientHello (line-2330)
-image::(https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094348.png[fff]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094348.png[fff]
 
 （2）severHello (line-2380)
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094402.png[20200401094402.png]
 
 注意到这里服务器和客户端就有2个随机数了。并且加密算法也确定了。
 
 （3）Certificate / severHelloDone(line 2435)
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094413.png[20200401094413.png]
 
 这部分主要是发送证书信息的 点开以后 证书的详细信息都能看到。另外serverhellodone的意思就是服务器的工作都完毕了。
 
-
 （4）Client key exchange / ChangeCipherSpec (line-2449)
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094425.png[20200401094425.png]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094425.png[20200401094425.png]
 
 可以看出来这里一共有三个步骤，我们来依次分析 这三次动作都做了什么:
 
 Client Key Exchange
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094438.png[20200401094438.png]
 
 服务器收到这个random3的加密信息以后，用自己的私钥解密，这样服务器和客户端就共同拥有了random 1，2，3这3组随机数，然后用这三组数据生成一个密钥，这个密钥就是后面我们applicationdata交互时使用的对称加密的密钥了。
 
 ChangeCipherSpec
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094506.png[20200401094506.png]
 
 （5）Change Cipher Spec Finished /new session ticket(line 2926)
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094526.png[20200401094526.png]
 
 解释参考图片描述。
@@ -258,11 +281,13 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 这个加密数据客户端收到以后就可以保存下来，这样下一次再请求https的时候，就可以把这个session ticket发过去，这样可以省很多握手的时间和资源消耗。（前面我们分析的其实已经相当复杂了，尤其是非对称加密对服务端的资源消耗相当之大）,实际上对于多数浏览器来说，指向同一个域名的https连接，我们都会有意识的让第一个https连接完成握手之后再连接第n个 https。因为这样后续的https 就可以携带相关信息，可以省很多资源这个ticket实际上就有点类似cookie。
 
 在笔者的这次访问chrome-gitub的过程中，浏览器并没有使用ticket技术而是使用的seession id技术：
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094538.png[20200401094538.png]
 
-sessionid 实际上作用和ticket差不多，但是sessionid 无法做到服务器之间同步，毕竟id 存在服务器内存中， https://cloud.tencent.com/product/clb?from=10680[负载均衡]带来的状态机同步是一个大问题。
+sessionid 实际上作用和ticket差不多，但是sessionid 无法做到服务器之间同步，毕竟id 存在服务器内存中， https://cloud.tencent.com/product/clb?from=10680[负载均衡] 带来的状态机同步是一个大问题。
 
 （6）Application Data (line-2964)
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200401094551.png[20200401094551.png]
 
 
@@ -271,7 +296,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
  数字签名认证算法即可保证此类问题，其实简单来说就是服务器和客户端事先约定好一种加密规则即可，就可以得知是否被篡改。
  这部分由于不是重点，暂时不讲的太细，只要知道有这么个事即可。实际上你弄懂整个https以后这个地方就自然而然也能想明白了。
 
-参考[《蚂蚁区块链第9课 SSL/TLS工作原理及在蚂蚁BAAS中的应用》](https://www.jianshu.com/p/b7f839182a1e)可了解SSL/TLS的原理和在蚂蚁区块链的应用。
+参考 https://www.jianshu.com/p/b7f839182a1e[《蚂蚁区块链第9课 SSL/TLS工作原理及在蚂蚁BAAS中的应用》] 可了解SSL/TLS的原理和在蚂蚁区块链的应用。
 
 == 3.参考
 （1） https://blog.csdn.net/xiaoming100001/article/details/81109617[HTTP和HTTPS协议，看一篇就够了]

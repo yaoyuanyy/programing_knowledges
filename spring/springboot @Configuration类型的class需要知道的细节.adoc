@@ -34,6 +34,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/201
 == @Configuration注解作用
 
 @Configuration标识的类有这些特性：可以声明多个@Bean方法，且在运行时被spring容器处理来生成BeanDefinition。@Configuration类是被AnnotationConfigWebApplicationContext启动(bootstrap)处理流程的。声明方式如下代码
+
 ----
  @Configuration
  public class AppConfig {
@@ -46,6 +47,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/201
 
 ----
 @Configuration class存在如下约束，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191125072356.png[20191125072356.png]
 
 == @Configuration class源码加载分析
@@ -53,12 +55,13 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/201
 === @Configuration相关的类
 
 如果IDE你使用的Idea，double Shift键，输入`ConfigurationClass`，会出现一长列的类，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191125075119.png[20191125075119.png]
-这些类分工协作，从加载标识@Configuration的.class文件，到生成BeanDefinition，再到生成ConfigurationClass对象，再到解析ConfigurationClass对象，即解析@ConfigurationClass class类中@Bean、@Import、@ImportResource等注解
+这些类分工协作，从加载标识 @Configuration的.class文件，到生成BeanDefinition，再到生成ConfigurationClass对象，再到解析ConfigurationClass对象，即解析@ConfigurationClass class类中@Bean、@Import、@ImportResource等注解
 
 .class的作用表格
 |===
-|class | 作用|
+|class | 作用
 
 |ConfigurationClass |专门表示@Configuration class。存储解析@Configuration class的信息|
 |ConfigurationClassPostProcessor |专门用于处理@Configuration class的BeanDefinitoinRegistryPostProcessor（BeanFactoryPostProcessor子类)|
@@ -84,7 +87,7 @@ public static void invokeBeanFactoryPostProcessors(
 
 		// First, invoke the BeanDefinitionRegistryPostProcessors that implement PriorityOrdered.
 		String[] postProcessorNames =
-				beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false); // (1)
+			beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false); // (1)
 		for (String ppName : postProcessorNames) {
 			if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
 				currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class)); // (2)
@@ -101,6 +104,7 @@ public static void invokeBeanFactoryPostProcessors(
 	···
 }
 ----
+
 这个方法处理所有的BeanFactoryPostProcessor类型对象，但是通过优先级来规定先后处理顺序，优先级维度有两个:`1:BeanDefinitionRegistryPostProcessor类型和BeanFactoryPostProcessor类型；2:PriorityOrdered和Ordered`。而
 ConfigurationClassPostProcessor同时实现了BeanDefinitionRegistryPostProcessor和PriorityOrdered，所以它得到最优先处理的机会
 
@@ -109,6 +113,7 @@ ConfigurationClassPostProcessor同时实现了BeanDefinitionRegistryPostProcesso
 
 ==== 应用ConfigurationClassPostProcessor实例加载@Configuration进行BeanDefinition注册
 如上方法(3)处，即为应用ConfigurationClassPostProcessor实例。
+
 ----
 PostProcessorRegistrationDelegate class
 private static void invokeBeanDefinitionRegistryPostProcessors(
@@ -124,16 +129,19 @@ public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) {
 	processConfigBeanDefinitions(registry);
 }
 ----
+
 从方法名大概就知道方法的作用了，会调用所有`BeanDefinitionRegistryPostProcessor类型`的`postProcessBeanDefinitionRegistry()`方法，此处只有`ConfigurationClassPostProcessor`符合。
 
 ==== 应用ConfigurationClassPostProcessor实例将BeanDefinition.beanClass生成proxy代理类
 如上`invokeBeanFactoryPostProcessors`方法(4)处，经过了方法(3)的处理，@Configuration类已经生成BeanDefinition，此时BeanDefinition.beanClass值为原类class对象。而方法(4)处目的是将BeanDefinition.beanClass赋值为proxy代理类，`这里留个问题，其他为什么要设置成proxy代理类呢`
 
 关于方法(3)和方法(4)要做的事，参考下图，时机和作用清晰的对比和展示
-![20191212080200.png](https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191212080200.png)
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191212080200.png[20191212080200.png]
 
 ==== @Configuration class过程解析
 下面的方法就是解析@Configuration class的核心逻辑了。解析过程可以总结分三步，正好对应着方法中(1),(2),(3)处
+
 ----
 ConfigurationClassPostProcessor class
 public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
@@ -174,12 +182,15 @@ public void processConfigBeanDefinitions(BeanDefinitionRegistry registry) {
 	··· ···
 }
 ----
+
 step1: 获取候选者
 从spring容器拿到所有的beanDefinitionNames，然后遍历验证获得候选者，验证的依据是class metadata是否含有@Configuration注解，从下面我们可知，此时，beanDefinitionNames中只有`consumerFeignApp`符合条件。所以候选者就是consumerFeignApp及他的beanDefinition
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191126082030.png[20191126082030.png]
 
 step2: 通过候选者获取ConfigurationClass
 找到了候选者，下面就对候选者进行解析，解析的全部功能和逻辑都集中在ConfigurationClassParser类中，看名称可知，这个类专业解析@Configuration类。
+
 ----
 ConfigurationClassParser class
 public void parse(Set<BeanDefinitionHolder> configCandidates) {
@@ -241,9 +252,11 @@ protected final SourceClass doProcessConfigurationClass(ConfigurationClass confi
 ----
 
 如上方法整体的逻辑为对ConfigurationClass和SourceClass解析，检查他们有没有@ComponentScan，@Import，@Bean methods，@ImportResource，@PropertySource这些注解，如果有，分别对其解析，解析后的结果放入ConfigurationClass的各属性中，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191128000838.png[20191128000838.png]
 
 各个注解的属性值中可能又包含@Configuration注解，又要对包含的@Configuration注解进行解析，这样形成了递归，所以解析过程中有三个方法形成了三角递归调用的逻辑，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191127235053.png[20191127235053.png]
 
 这一步会将我们项目中定义的@Configuration类都加载进来，你可能有疑问，难道项目中我们自己定义的@Configuration类都是靠递归加载进来的？答案当然是NO，请注意@ComponentScan注解，这个注解的解析器很厉害，它把所有的标识@Component注解的class加载进来，而@Configuration，@RestController，@Service，@Repository等都包含@Component，所有这些注解的class都会加载进来形成BeanDefinition存入spring 容器(解析过程详见ComponentScanAnnotationParser)。说回来，对于@ComponentScan解析器加载进来的BeanDefinitoin，会进行时@Configuration进行过滤，从而得到@Configuration类，再次调用parse()方法，这时体现出三角递归调用了。此时，项目中所有我们自定义的@Configuration类都获取到了
@@ -254,6 +267,7 @@ step2中对@Configuration类的@Import，@Bean methods，@ImportResource进行�
 
 回到ConfigurationClassPostProcessor.processConfigBeanDefinitions()方法(3)处，现在，我们解析ConfigurationClass，而解析ConfigurationClass过程由ConfigurationClassBeanDefinitionReader类负责的
 看code
+
 ----
 ConfigurationClassBeanDefinitionReader class
 public void loadBeanDefinitions(Set<ConfigurationClass> configurationModel) {
@@ -286,7 +300,9 @@ private void loadBeanDefinitionsForConfigurationClass(
 	loadBeanDefinitionsFromRegistrars(configClass.getImportBeanDefinitionRegistrars());
 }
 ----
+
 看loadBeanDefinitionsForConfigurationClass()方法，方法主要功能为对ConfigurationClass的beanMethods，importedResources，importBeanDefinitionReistrars属性进行解析，为什么要对这三个属性进行解析呢，看看这三个其@Import，@Bean methods，@ImportResource的用法
+
 ----
 @Import(DispatcherServletConfiguration.class)
 @ImportResource("classpath:/com/acme/database-config.xml")
@@ -298,10 +314,12 @@ protected static class DispatcherServletRegistrationConfiguration {
 	}
 }
 ----
+
 可以看到，这三个注解的属性值都是类或者配置文件或者加载文件的类，所以，需要解析，从而将解析到的.class文件转化为BeanDefinition放入spring容器。
 
 == @Configuration类的cglib代理类实例化分析
 由于@Configuration注解的都是类，而非接口，所有这里使用的是cglib代理技术，ConfigurationClassEnhancer包装了cglib。`这里我们实际工作中可以直接复用ConfigurationClassEnhancer满足我们生成代理类的场景`
+
 ----
 实现自BeanFactoryPostProcessor.postProcessBeanFactory
 ConfigurationClassPostProcessor class
@@ -354,14 +372,15 @@ public Class<?> enhance(Class<?> configClass, @Nullable ClassLoader classLoader)
 
 == it`s time to summary
 
-整个过程可以看做是一颗小树长成参天大树，consumerFeignApp就是树苗，而我们项目的代码就是后来大树的枝干和叶子。枝干和叶子与@ComponentScan，@Import，@Bean methods，@ImportResource，@PropertySource，@Configuration交织在一起被解析出来，生成beanDefinition、实例对象或代理类。
+整个过程可以看做是一颗小树长成参天大树，consumerFeignApp就是树苗，而我们项目的代码就是后来大树的枝干和叶子。枝干和叶子与@ComponentScan，@Import，@Bean methods，@ImportResource，@PropertySource，@Configuration交织在一起被解析出来，生成beanDefinition、实例对象或代理类
 
-本文主要说明了标识了@Configuration的.class文件，是如何被解析成ConfigurationClass，再到转化为ConfigurationClassBeanDefinition放入spring容器，再到如何解析ConfigurationClass对象属性。为了集中阐述@Configuration，所以，其他的部分这里不做详述和延展。如果阅读后你有所收获，共享欢喜
+本文主要说明了标识了 @Configuration的.class文件，是如何被解析成ConfigurationClass，再到转化为ConfigurationClassBeanDefinition放入spring容器，再到如何解析ConfigurationClass对象属性。为了集中阐述@Configuration，所以，其他的部分这里不做详述和延展。如果阅读后你有所收获，共享欢喜
 
 
 == 知识点收获回复
 1，2，3，4相信你已经有答案了，现在，我们看看扩展点有什么 
 1. 加载一些package目录下的.class文件
+
 ----
 ClassPathBeanDefinitionScanner scanner = new ClassPathBeanDefinitionScanner(this.registry,
 			componentScan.getBoolean("useDefaultFilters"), this.environment, this.resourceLoader);

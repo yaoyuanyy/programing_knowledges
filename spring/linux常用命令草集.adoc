@@ -16,7 +16,7 @@ Doc writer yaoyihao1@gmail.com
 
 == 你可能不知道的个人常用命令
 
-----bash
+----
 ctrl u 可以删除行内光标所在位置之前的内容 - 常用
 ctrl l 可以清屏 - 常用
 ctrl a 可以将光标移至行首
@@ -47,20 +47,20 @@ skyler@bogon  ~/skyler/a [ ! -d /home/test/exist ] && mkdir /home/test/exist
 
 当这个参数特别长的时候此命令特别有用
 
-----`bash
+----
 skyler@bogon  ~/skyler/a 201910  cd /Users/skyler/skyler/a
 skyler@bogon  ~/skyler/a 201910  ll !$
 skyler@bogon  ~/skyler/a 201910  ll /Users/skyler/skyler/a
 total 64
 -rw-r--r--  1 skyler  staff   346B  8  8 11:55 Dockerfile
 -rw-r--r--  1 skyler  staff   249B  8  9 14:16 README.md
-----`
+----
 
 ===  !!
 
 > 执行上一条命令
 
-----bash
+----
 [root@aizbp11lqlgyf2g31fgs4hg ~]# cat test.sh
 echo $# $0 $1
 aaa=111
@@ -71,12 +71,11 @@ aaa=111
 ----
 
 
-
 === 从历史记录中使用命令号来运行命令
 
-首先输入 “**history**” 命令得到命令的序号
+首先输入 **history** 命令得到命令的序号
 
-----bash
+----
 skyler@bogon  ~/bin history
 10063* [ ! d ~/test/exist ] && echo "no"
 10064* [ diff ~/test/exist ] && echo "no"
@@ -86,14 +85,14 @@ skyler@bogon  ~/bin history
 
 然后通过每行前的序号结合!来执行此行命令
 
-----bash
+----
 skyler@bogon  ~/bin  !10065
 skyler@bogon  ~/bin  [ ! -d ~/test/exist ] && echo "no"
 ----
 
 还可以使用!-n, n为数字
 
-----bash
+----
 skyler@bogon  ~/bin  !-2
 skyler@bogon  ~/bin  [ ! -d ~/test/exist ] && echo "no"
 ----
@@ -156,7 +155,6 @@ Codename:	Core
 ----
 
 
-
 == 网络
 
 === 网络连接(进程端口)
@@ -172,7 +170,7 @@ lsof：查看网络连接
 
 可以查看pid和服务端口的对应关系
 
-----bash
+----
 [root@aizbp11lqlgyf2g31fgs4hg ~]# ss -ptl
 State      Recv-Q Send-Q                                                                                         Local Address:Port                                                                                                          Peer Address:Port
 LISTEN     0      128                                                                                                   *:ssh                                                                                                                      *:*                     users:(("sshd",pid=1329,fd=3))
@@ -181,7 +179,7 @@ LISTEN     0      128                                                           
 [root@aizbp11lqlgyf2g31fgs4hg ~]#
 ----
 
-----bash
+----
 [root@aizbp11lqlgyf2g31fgs4hg ~]# ss -ptln|grep 20282
 LISTEN     0      100          *:20282                    *:*                   users:(("java",pid=17470,fd=21))
 ----
@@ -190,7 +188,7 @@ LISTEN     0      100          *:20282                    *:*                   
 
 只想看已建立的 socket（排除了 *listening* 和 *closed* ）
 
-----bash
+----
 $ ss state connected sport = :ssh
 Netid State      Recv-Q Send-Q     Local Address:Port                      Peer Address:Port
 tcp   ESTAB      0      0          192.168.0.136:ssh                      192.168.0.102:46540
@@ -198,7 +196,7 @@ tcp   ESTAB      0      0          192.168.0.136:ssh                      192.16
 
 列出指定的 host 或者 ip 段。例如，列出到达 74.125.0.0/16 子网的连接，这个子网属于 Google
 
-----bash
+----
 $ ss state all dst 74.125.0.0/16
 Netid State      Recv-Q Send-Q     Local Address:Port                      Peer Address:Port
 tcp   ESTAB      0      0          192.168.0.136:33616                   74.125.142.189:https
@@ -210,7 +208,7 @@ tcp   ESTAB      0      0          192.168.0.136:57408                   74.125.
 
 > 非常实用的系统级的监控、诊断工具
 
-----bash
+----
 查看指定端口有哪些进程在使用 lsof -i:PORT（lsof -i 列出所有的打开的网络连接） 
 [root@aizbp11lqlgyf2g31fgs4hg ~]# lsof -i:32000
 COMMAND   PID USER   FD   TYPE   DEVICE SIZE/OFF NODE NAME
@@ -239,7 +237,6 @@ lsof -c firefox
 
 查看被删除的文件。有些删了的文件，但是进程没reload，那些空间还是占用的
 lsof|grep -i delete
-
 ----
 
 
@@ -325,6 +322,7 @@ todo
 ===== 数据传输
 
 使用netcat实现聊天
+
 ----
 47.98.189.37机器，监听80端口(注意:我这里是aliyun服务器，他的安全策略是只开放了80等端口，你使用其他端口可能无法实现聊天，这是因为阿里云的安全策略控制的，你需要配置你使用的端口)
 接收端启动监听
@@ -417,7 +415,7 @@ Linux izbp10lqlgy2g31s41bt94z 3.10.0-693.2.2.el7.x86_64 #1 SMP Tue Sep 12 22:26:
 [root@aizbp11lqlgyf2g31fgsfhg ~]# mtr www.baidu.com
 ----
 
-![image-20191019225352819](linux命令温故知新/image-20191019225352819.png)
+image::linux命令温故知新/image-20191019225352819.png[image-20191019225352819]
 
 http://einverne.github.io/post/2017/11/mtr-usage.html
 
@@ -487,7 +485,7 @@ scp是 secure copy的缩写, scp是linux系统下基于ssh登陆进行安全的�
 
 ===== 使用实例
 
-=====# 从本地服务器上传到远程服务器
+===== 从本地服务器上传到远程服务器
 
 ----
 (1) 上传文件
@@ -524,7 +522,7 @@ scp -r /opt/soft/mongodb root@10.80.100.20:/opt/soft/scptest
 
 
 
-=====# 从远程服务器下载到本地服务器
+===== 从远程服务器下载到本地服务器
 
 ----
 从远程下载到本地的scp命令与上面的命令雷同，只要将从本地上传到远程的命令后面2个参数互换顺序就行了。
@@ -704,10 +702,7 @@ tmpfs           920M     0  920M    0% /sys/fs/cgroup
 tmpfs           184M     0  184M    0% /run/user/0
 overlay          40G   19G   19G   51% /var/lib/docker/overlay2/85bcc5f201ed0fbf82697f11da0730fbb8543b0e6cc9707b43b331e6e02d4eb0/merged
 shm              64M     0   64M    0% /var/lib/docker/containers/10f26d49e94eb6042a25a7807f293a5b75abe75af571414c0ae6e878b0ccdf41/shm
-
 ----
-
-![image-20191020231155867](linux命令温故知新/image-20191020231155867.png)
 
 ==== du - disk usage
 
@@ -918,7 +913,7 @@ awk 和 sed
 
 ==== diff
 
-----bash
+----
 diff file1 file2 -y
 
 使用 diff -r tree1 tree2 | diffstat 查看变更的统计数据

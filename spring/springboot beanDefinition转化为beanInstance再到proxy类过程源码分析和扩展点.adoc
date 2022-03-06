@@ -57,7 +57,8 @@ public class UserServiceImpl implements IUserService {
 如果bean是我们项目中定义的`@Component`类，如示例`UserServiceImpl`类。它的加载和生成beanDefinition要感谢`@ComponentScan`这个注解，当然更要感谢真正发挥作用的`ClassPathBeanDefinitionParser`类它的`doScan(basePackages)`承担了这个阶段的功能实现。
 
 === bean在beanDefinition-->beanInstance阶段
-这个阶段的功能实现一定要感谢`AbstractAutowireCapableBeanFactory`，记住这个常常的名字，因为每个bean的实例化都是他的功劳。它的`createBean(beanName, RootBeanDefinition,args)`方法如这个阶段的入口。入口内做了三件事
+这个阶段的功能实现一定要感谢`AbstractAutowireCapableBeanFactory`，记住这个常常的名字，因为每个bean的实例化都是他的功劳。它的 `createBean(beanName, RootBeanDefinition,args)` 方法如这个阶段的入口。入口内做了三件事
+
 1. 生成beanInstance，即bean对象本尊
 此功能由`createBeanInstance(beanName, RootBeanDefinition,args)`负责
 2. 向bean的beanDefinition赋属性和值
@@ -74,7 +75,9 @@ public class UserServiceImpl implements IUserService {
 如果本文带给你兴趣了，那么深入剥洋葱这个事儿，你也可以开始了
 
 最后附上spring容器管理bean的生命周期图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191201231917.png[20191201231917.png]
 
 最后的最后，一个飞猫 relax us
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/%E9%A3%9E%E7%8C%AB.png[飞猫.png]

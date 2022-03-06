@@ -18,27 +18,25 @@ BeanFactoryPostProcessory与BeanPostProcessor在spring框架中扮演着很重�
 
 
 == BeanFactoryPostProcessory简介
+
 首先看下类的javadoc 
-<font size=1>
+ 
 * Allows for custom modification of an application context's bean definitions, adapting the bean property values of the context's underlying bean factory.
 * Application contexts can auto-detect BeanFactoryPostProcessor beans in their bean definitions and apply them before any other beans get created.
 * Useful for custom config files targeted at system administrators that override bean properties configured in the application context.
 * See PropertyResourceConfigurer and its concrete implementations for out-of-the-box solutions that address such configuration needs.
 * A BeanFactoryPostProcessor may interact with and modify bean definitions, but never bean instances. Doing so may cause premature bean instantiation, violating the container and causing unintended side-effects. If bean instance interaction is required, consider implementing BeanPostProcessor instead
 
-</font>
-
 翻译如下：
-<font size=1>
+
 * 允许application context的bean definitions自定义修改，改写the context的底层bean factory的bean的属性值。
 * Application context能通过他的bean definitions自动检测到 BeanFactoryPostProcessor beans，并在其他的beans被创建前应用the beans
 * 自定义config files去覆盖application context配置的bean属性是有用的
 * 查看PropertyResourceConfigurer类和他的具体的实现为解决那些配置需要的即插即用的方案 // todo 没懂
 * A BeanFactoryPostProcessor用于修改bean definitions，而不是bean instances。这么做可导致bean过早的 instantiation(实例化)、侵犯容器和其他意外的副作用。如果你要bean instance，请使用BeanPostProcessor
 
-</font>
 
-<font color="#FF0000">注</font>: 最后一段也是<font color="green" size=3 face="宋体"> *BeanFactoryPostProcessory与BeanPostProcessor区别*</font>
+注: 最后一段也是 *BeanFactoryPostProcessory与BeanPostProcessor区别*
 
 
 === 方法
@@ -49,26 +47,21 @@ BeanFactoryPostProcessory与BeanPostProcessor在spring框架中扮演着很重�
  * 允许覆盖或添加属性，甚至是初始化bean
  */
 void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException;
-
-
 ----
 
 == BeanPostProcessor简介
 首先看下类的javadoc 
-<font size=1>
+
 * Factory hook that allows for custom modification of new bean instances, e.g. checking for marker interfaces or wrapping them with proxies.
 * ApplicationContexts can autodetect BeanPostProcessor beans in their bean definitions and apply them to any beans subsequently created. Plain bean factories allow for programmatic registration of post-processors, applying to all beans created through this factory
 * Typically, post-processors that populate beans via marker interfaces or the like will implement postProcessBeforeInitialization(java.lang.Object, java.lang.String), while post-processors that wrap beans with proxies will normally implement postProcessAfterInitialization(java.lang.Object, java.lang.String)
 
-</font>
 
 翻译如下：
-<font size=1>
+
 * BeanPostProcessor是一个 Factory hook，他允许自定义bean instances的修改，例如：检查marker interfaces 或者wrapping them with proxies
 * Application contexts能在他们的bean definitions中自动检查到BeanPostProcessror beans，并在随后创建的任何beans中应用他们。普通的bean factorys允许post-processors的程序化注册，通过this factory应用到所有创建的beans
 * 典型的，通过marker interfaces或者类似的产生beans的post-processors将实现postProcessBeforInitialization(Object,String)方法，而通过porxies包装beans的post-processors将实现postProcessAfterInitialization(Object,String)方法
-
-</font>
 
 
 === 方法
@@ -89,20 +82,20 @@ Object postProcessBeforeInitialization(Object bean, String beanName) throws Bean
  * This callback will also be invoked after a short-circuiting triggered by a InstantiationAwareBeanPostProcessor.postProcessBeforeInstantiation(java.lang.Class<?>, java.lang.String) method, in contrast to all other BeanPostProcessor callbacks
  */
 Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException;
-
-
 ----
 
 
 == 总结：
-- <font color="green">*BeanFactoryPostProcessor负责处理bean definitions. 而BeanPostProcessor负责处理bean instances*</font>
+
+- *BeanFactoryPostProcessor负责处理bean definitions. 而BeanPostProcessor负责处理bean instances*
 - 由于bean definition先与bean instance，所以spring 框架先应用BeanFactoryPostProcessor，之后再应用BeanPostProcessor
 - 通俗的话讲，在bean instance之前，你可以使用BeanFactoryPostProcessor操作bean definitons来编辑bean(覆盖或属性赋值等)，然后BeanPostProcessor进行bean instance操作
 
 
 以下从stackoverflow获取
 
-== The differences about BeanFactoryPostProcessor and BeanPostProcessor:
+== The differences about BeanFactoryPostProcessor and BeanPostProcessor
+
 * A bean implementing BeanFactoryPostProcessor is called when all bean definitions will have been loaded, but no beans will have been instantiated yet. This allows for overriding or adding properties even to eager-initializing beans. This will let you have access to all the beans that you have defined in XML or that are annotated (scanned via component-scan).
 * A bean implementing BeanPostProcessor operate on bean (or object) instances which means that when the Spring IoC container instantiates a bean instance then BeanPostProcessor interfaces do their work.
 * BeanFactoryPostProcessor implementations are "called" during startup of the Spring context after all bean definitions will have been loaded while BeanPostProcessor are "called" when the Spring IoC container instantiates a bean (i.e. during the startup for all the singleton and on demand for the proptotypes one)
