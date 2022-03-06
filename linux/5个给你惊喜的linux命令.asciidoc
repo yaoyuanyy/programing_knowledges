@@ -16,10 +16,10 @@
 
 Doc writer yaoyihao1@gmail.com
 
-== 0. 神器 ``ranger ``命令行导航文件系统
+== 0. 神器 ranger 命令行导航文件系统
 
 
-``ranger``对于使用命令行浏览文件系统非常有用。您可能需要安装``ranger``才能使用它，但是一旦安装，就可以通过在终端中键入以下命令来运行它。
+`ranger` 对于使用命令行浏览文件系统非常有用。您可能需要安装 `ranger` 才能使用它，但是一旦安装，就可以通过在终端中键入以下命令来运行它。
 
 ----
 $ ranger
@@ -84,6 +84,7 @@ $ ranger # <1>
 == 2 SUDO !!
 每次输入一些命令时，然后出现`Permission denied`字样。这时，您都会感激此命令
 实例
+
 ```
 $ apt-get install ranger
 然后提示你没有权限：`Permission denied`。这时你才想起来，要加`sudo`命令，然而还要从新敲一遍刚才的命令文本，好麻烦
@@ -126,7 +127,7 @@ nohup wget http"//xxxx &
 详情参考 https://zhuanlan.zhihu.com/p/59297350[&与nohup的用法]
 
 
-== 5 ``at``指定时间执行命令
+== 5 at 指定时间执行命令
 
 如果您已连接到``ssh``服务器，并且希望该命令在``ssh``会话注销后仍保持运行，则``nohup``命令会很好.
 

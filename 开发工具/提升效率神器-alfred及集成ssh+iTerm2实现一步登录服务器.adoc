@@ -51,7 +51,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 实际工作中有多个远程服务器，需要连接。每个都要如上操作一遍，实在繁琐。尤其是复杂密码的时候
 
-=== 使用``ssh config``
+=== 使用 ssh config
 
 实现密码登录的方法是通过``openssh`` 的``ssh config``的功能。具体操作为``~/.ssh/config``，如果不存在，可以新建一个
 然后``vim ~/.ssh/config``
@@ -99,7 +99,7 @@ $ ssh aliyun
 
 到目前为止，你会发现没有用到``alfred``，已经实现在``iTerm2``上一步搞定了。是的，但是我们通过``alfred``，可以用更简便的方式来连接远程服务器
 
-== 安装`alfred-ssh`插件
+== 安装 alfred-ssh 插件
 连接如下：https://github.com/deanishe/alfred-ssh 下载最新版：``Secure-SHell-0.8.0.alfredworkflow``，双击自动添加到``alfred``的``workflow``页，效果如下图
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916235410.png[20200916235410]
@@ -107,7 +107,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 此时``alfred-ssh``就引入到``alfred``了，这时候你就可以使用``alfred``来打开远程服务器了，输入`ssh aliyun`,你会发现终端连接上了``aliyun``，够爽吧。但你会发现，这个终端显示的``mac``自带的终端，而我们早已喜欢上了``iterm2``。
 
 
-== 安装``alfred``集成``Iterm2``配置
+== 安装 alfred 集成 Iterm2 配置
 
 所以如果想使用``Iterm2``作为终端，需要接着配置，如下图
 
@@ -126,11 +126,11 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916235508.png[20200916235508]
 
-=== 安装``alfred``插件``custom-iterm-applescripts-for-alfred``
+=== 安装 alfred 插件 custom-iterm-applescripts-for-alfred 
 
 点击 https://github.com/stuartcryan/custom-iterm-applescripts-for-alfred[iTerm2 plugin for Alfred]，这是一个牛人写的``custom applescript``，根据你的iterm版本选择``applescript``命令，如下图
 
-iamge::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916235530.png[20200916235530]
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916235530.png[20200916235530]
 
 我的``iterm2``的版本是``Build 3.2.9``，所以我选择``For 3.1.1``的命令，选中复制curl ... ，粘贴到``iterm2``中回车，如下图
 
@@ -138,7 +138,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 粘贴它到上文的大输入框中，即``Alfred``的配置中：``Alfred Preferences → Features → Terminal/Shell → Application → Custom``
 
-=== ``itermURL Schemes``配置
+=== itermURL Schemes 配置
 ``preferences → Profiles → PROFILE_NAME → General → URL Schemes``，选择``ssh``，这样设置默认为``ssh``激活状态
 
 到此就全部配置完成了
@@ -146,6 +146,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 == 爽不爽
 
 验收效果
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200916235559.png[20200916235559]
 
 回车

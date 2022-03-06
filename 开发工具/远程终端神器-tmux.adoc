@@ -216,6 +216,7 @@ http://mindonmind.github.io/notes/linux/tmux.html
 https://blog.csdn.net/trochiluses/article/details/9773103
 https://harttle.land/2015/11/06/tmux-startup.html
 https://segmentfault.com/a/1190000008188987
+
 扩展
 http://louiszhai.github.io/2017/09/30/tmux/=Tmux-Resurrect
 

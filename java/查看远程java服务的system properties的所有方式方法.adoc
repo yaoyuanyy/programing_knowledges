@@ -36,9 +36,11 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 [NOTE]
 很多大厂里，为了安全性，运维人员会禁掉或加权限actuator的端点访问。这样，我们就无法使用这种方式了。
 
-=== method 2 - `jinfo -sysprops`
+=== method 2 - jinfo -sysprops
+
 大家都知道，java本身暴露给我们几大命令，是的，通过命令也可以查看java系统参数，使用jinfo命令。jinfo -sysprops pid。
 如下
+
 ----
 [root@test code]= jinfo -sysprops 1
 Attaching to process ID 1, please wait...
@@ -56,17 +58,20 @@ java.io.tmpdir = /tmp
 同样，这种方式也面临同样的问题：很多大厂里，为了安全性，运维人员会禁掉或加权限actuator的端点访问。这样，我们就无法使用这种方式了。
 
 操作时会报下面的错误
+
 ----
 [01@online 20201021]$ jinfo  13900                                                             
 Attaching to process ID 13900, please wait...
 Error attaching to process: sun.jvm.hotspot.debugger.DebuggerException: cannot open binary file
 sun.jvm.hotspot.debugger.DebuggerException: sun.jvm.hotspot.debugger.DebuggerException: cannot open binary file
-        at sun.jvm.hotspot.debugger.linux.LinuxDebuggerLocal$LinuxDebuggerLocalWorkerThread.execute(LinuxDebuggerLocal.java:163)
+  at sun.jvm.hotspot.debugger.linux.LinuxDebuggerLocal$LinuxDebuggerLocalWorkerThread.execute(LinuxDebuggerLocal.java:163)
 ----
 
 
-=== method 3 - `jvisualvm or VisualVM`
+=== method 3 - jvisualvm or VisualVM
+
 我们知道，java也暴露给我们一些可视化监控的工具，我们可以远程连接，从而查看java系统属性。如jvisualvm，VisualVM，jconsole，jmc。但有个前提，java -jar启动命令里需要配置jmx参数
+
 ----
 -Dcom.sun.management.jmxremote 
 -Dcom.sun.management.jmxremote.port=8081 
@@ -74,17 +79,20 @@ sun.jvm.hotspot.debugger.DebuggerException: sun.jvm.hotspot.debugger.DebuggerExc
 -Dcom.sun.management.jmxremote.ssl=false
 ----
 我们看下jvisualvm的效果
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201021150032.png[20201021150032]
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201021150401.png[20201021150401]
 
 如上图所示，这种方式也可以方便的看到java系统参数。但是需要暴露jmx配置，所以，假如java -jar没有暴露jmx参数，那么这种方式就不能使用了。
 
-=== method 4 - `java -XshowSettings:category`
+=== method 4 - java -XshowSettings:category
 这种方式，也是通过java命令，是java的-X命令，-X命令是java非标准的命令，但也很稳定。更关键的是这种方式是没有局限的。运维一般不会加权限
 
 `-XshowSettings:category`
+
 Possible category arguments for this option include the following:
+
 ----
 all
 Shows all categories of settings. This is the default value.

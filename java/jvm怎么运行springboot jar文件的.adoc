@@ -48,7 +48,7 @@ https://juejin.cn/post/6844904088707186701[springboot jar包可运行,debug可�
 
 == 正文
 
-===  `-jar` 的规矩
+===  -jar 的规矩
 其实， `java` 对 `-jar` 定义了一些规则，只要符合这个规则，你做啥都行，怎么做都行。其中的一个是: `jar` 中需要一个 `META-INF/MAINFEST.MF` 文件，且文件中 `Main-Class manifest header` 。官网的说明如下
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417141240.png[20210417141240]
@@ -59,8 +59,8 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 正是因为有了 `Main-Class: org.springframework.boot.loader.JarLauncher` ，所以，当 `java -jar xxx-executable.jar` 时，程序会进入 `org.springframework.boot.loader.JarLauncher` 执行 `main` 方法。到这里我又有了疑问，那是从哪进入 `JarLauncher.main` 方法的呢
 
-== 从 `jvm` 进入 `java` 
-=== 程序是怎么进入 `JarLauncher.main` 方法的呢
+== 从 jvm 进入 java
+=== 程序是怎么进入 JarLauncher.main 方法的呢
 这个时候想到了 `jvm` 。应该是从 `jvm` 进去到了 `JarLauncher.main` ，那么怎么验证呢。
 
 我们通过 `CLion` 查看 `jvm` 源码，试图找到这个答案。我们通过全局搜索 `Main-Class` , `Manifest`  这些关键词来定位所在的文件，并打上相应的 `debug` 端点。如下图
@@ -93,7 +93,7 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417175150.png[]
 
 
-==== （1） `LoadMainClass`  - 加载 `main class` 
+==== （1） LoadMainClass - 加载 main class 
 我们先看下 `LoadMainClass` 的细节，看看她咋加载的。通过 `GetLauncherHelperClass` 方法，我们终于看到了熟悉的身影： `sun/launcher/LauncherHelper`  这个 `java class` 。如下图
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417181757.png[20210417181757]
@@ -107,17 +107,17 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210417185738.png[20210417185738]
 
-==== （2）获取 `LauncherHelper` 的实例
+==== （2）获取 LauncherHelper 的实例
 这里的实例是在(1)中初始化好的，用就好了
 
-==== （4）验证和加载 `main` 方法
+==== （4）验证和加载 main 方法
 这里用了类似反射的方法来获取 `main` 方法
 
-==== （6）调用 `LauncherHelper.main` 方法
+==== （6）调用 LauncherHelper.main 方法
 这里就是我们一直要知道的那个地方，也是文章开头部分的问题1和3的答案。即 `jvm` 运行和 `java application` 的连接点。
 
 
-== 从 `java` 进入 `springboot` 
+== 从 java 进入 springboot 
 
 从 `java` 进入 `springboot` ，具体的地方是在LauncherHelper类中，在LauncherHelper的checkAndLoadMain方法中，通过loadclass方法实例化 `org.springframework.boot.loader.JarLauncher` ；进而调用validateMainClass()方法，如下图
 

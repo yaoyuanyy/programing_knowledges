@@ -19,10 +19,12 @@ Doc writer yaoyihao1@gmail.com
 
 == 编码
 用idea创建个maven项目，如下图，项目名称随意，这里我的项目名为：microservice-comb-javaagent
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200310194628.png[20200310194628.png]
 
 代码如下
 首先，创建一个类：AgentDemo
+
 ----
 public class AgentDemo {
     /**
@@ -40,9 +42,11 @@ public class AgentDemo {
     }
 }
 ----
+
 NOTE: AgentDemo的全限定名会在pom.xml中标签`Premain-Class`引用
 
 其次，再创建一个类：AgentTest
+
 ----
 public class AgentTest {
     public static void main(String[] args) {
@@ -82,13 +86,16 @@ public class AgentTest {
     </plugins>
 </build>
 ----
+
 == 打jar包
+
 将`microservice-comb-javaagent`打成`jar`包。运行时会使用这个`Jar`包.打包命令:`mvn clean package`。结果如下图
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20200310200510.png[20200310200510.png]
 
 == 运行
 你可以有两个运行方式：`idea中直接运行`和`命令行运行`
+
 - idea中直接运行
 
 需要配置下项目的运行配置的`VM options`，如下图，形式为`-javaagent:jarpath[=options]`; 我的内容为：`-javaagent:/Users/xx/microservice-comb/microservice-comb-javaagent/target/microservice-comb-javaagent-1.0.0-SNAPSHOT.jar=hello world`
@@ -116,28 +123,33 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 这里有个对比，运行时是否加上`-javaagent:jar`，这个给你的感受会很明显和透彻。来再操作下
 
 加上时
+
 ----
 $ cd /Users/xx/microservice-comb/microservice-comb-javaagent/target/classes
 $ java -javaagent:/Users/xx/microservice-comb/microservice-comb-javaagent/target/microservice-comb-javaagent-1.0.0-SNAPSHOT.jar="hello world" com.skyler.cobweb.agent.AgentTest
 ----
 
 效果
+
 ----
------- premain方法 有两个入参 ------ agentArgs:hello world inst:sun.instrument.InstrumentationImpl@a09ee92
- ------ main方法
+premain方法 有两个入参 ------ agentArgs:hello world inst:sun.instrument.InstrumentationImpl@a09ee92
+main方法
 ----
 
 不加上时
+
 ----
 $ cd /Users/xx/microservice-comb/microservice-comb-javaagent/target/classes
 $ java com.skyler.cobweb.agent.AgentTest
 ----
 
 效果
-----
- ------ main方法
 
 ----
+main方法
+
+----
+
 效果还是很明显的，不加-javaagent，jar里的类方法没有执行，也即不会输出信息
 
 这个对比的目的是突出javaagent的作用。并让你清晰的感受javaagent的作用：像代理一样可以在main方法前做些事情，官方的说字节码增强。通过修改字节码的方式，让开发者有机会做些事情，如arthas 和skywalking的建监听组件
