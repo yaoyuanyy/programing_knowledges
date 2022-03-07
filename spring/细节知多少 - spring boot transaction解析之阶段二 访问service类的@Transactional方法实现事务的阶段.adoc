@@ -20,6 +20,7 @@ Doc writer yaoyihao1@gmail.com
 spring boot transaction我们平时用着非常简单，只需要在service方法上声明@Transactional就可以了。但是要知道，简单的背后是不简单，只是很多东西spring框架帮我们做好了。如果想进阶，想进步，想弄懂，想学习，需要接近它，了解它，弄懂它，最好的方法莫过于debug它的源码了。
 
 笔者把spring boot transaction的整个过程分为两个阶段
+
 1. 带有@Transactional方法的service类生成代理类的阶段
 2. 访问service类的@Transactional方法实现事务的阶段
 本文我们产出第二阶段：访问service类的@Transactional方法实现事务的阶段
@@ -30,12 +31,13 @@ spring boot transaction我们平时用着非常简单，只需要在service方�
 ----
 spring boot 1.5.10
 spring framework 4.3.14
-
 ----
 
 
 == 带着问题学习
-> 带着问题学习往往起到更好的效果
+
+[tip]
+带着问题学习往往起到更好的效果
 
 问题：
 
@@ -43,18 +45,19 @@ spring framework 4.3.14
 1. 平时总是spring默认的事务只有运行时异常才回滚，为什么
 2. 事务的savepoint是什么
 3. 如何做到多个数据操作的事务提交和回滚的
-
 ----
 
 
 == 调用流程图
-https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129090652.png[20201129090652]
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129090652.png[20201129090652]
+
 这是spring官网doc上关于spring transaction的调用流程图。我们大致先有个印象，每个节点的细节正是本文的重点内容。随着本文细节的逐一阐述完成，再回来看下这个图，会有更深的理解和掌握
 
 
 == http 访问
 
-> http://localhost:2372/user/updateSchoolName?schoolName=vl&studentId=3
+- http://localhost:2372/user/updateSchoolName?schoolName=vl&studentId=3
 
 当从controller访问service的方法时，因为controller引用的service指向的代理类，所以进去代理类的方法，如下
 
@@ -87,7 +90,6 @@ public final void updateSchoolName(String var1, long var2) {
 		throw new UndeclaredThrowableException(var5);
 	}
 }
-
 ----
 
 从这个方法我们知道，程序会进去var10000.intercept，即DynamicAdvisedInterceptor.intercept方法，我们看看这个方法内部代码
@@ -118,9 +120,9 @@ public Object intercept(Object proxy, Method method, Object[] args, MethodProxy 
 		······
 	}
 }
-
 ----
-在这个方法中，会创建CglibMethodInvocation实例，proxy, target，chain等参数传给它，然后调动proceed()方法。这里运用了一个设计模式：<font color=green>责任链模式的变种</font>，CglibMethodInvocation拥有一个MethodInterceptor集合，通过proceed()方法执行interceptor chain。proceed()会遍历interceptorsAndDynamicMethodMatchers(其实就是interceptor集合)从而执行每个interceptor.invoke(MethodInvocation)自身的逻辑，因为这个时候MethodInvocation会传递给invoke方法，所以每一个invoke方法内部都会执行MethodInvocation.proceed()，从而这样形成了一个链式的调用关系。我们看下链式代码结构
+
+在这个方法中，会创建CglibMethodInvocation实例，proxy, target，chain等参数传给它，然后调动proceed()方法。这里运用了一个设计模式： *责任链模式的变种* ，CglibMethodInvocation拥有一个MethodInterceptor集合，通过proceed()方法执行interceptor chain。proceed()会遍历interceptorsAndDynamicMethodMatchers(其实就是interceptor集合)从而执行每个interceptor.invoke(MethodInvocation)自身的逻辑，因为这个时候MethodInvocation会传递给invoke方法，所以每一个invoke方法内部都会执行MethodInvocation.proceed()，从而这样形成了一个链式的调用关系。我们看下链式代码结构
 
 
 ----
@@ -147,9 +149,10 @@ public Object invoke(MethodInvocation mi) throws Throwable {
     // 又调回MethodInvocation.proceed()方法
     return mi.proceed();
 }
-
 ----
-对我们事务代理而言，这个链上的interceptor就是TransactionInterceptor，程序进入TransactionInterceptor.invoke(this)，可以看到这个方法的参数是this，<font color=green>一般的链式调用模型都会传this作为参数，我们应该学会这种高级操作</font>。
+
+对我们事务代理而言，这个链上的interceptor就是TransactionInterceptor，程序进入TransactionInterceptor.invoke(this)，可以看到这个方法的参数是this， *一般的链式调用模型都会传this作为参数，我们应该学会这种高级操作*
+
 从这个方法才开始进行spring transaction事务有关的操作，看下内部
 
 ----
@@ -164,13 +167,13 @@ public Object invoke(final MethodInvocation invocation) throws Throwable {
 		}
 	});
 }
-
 ----
+
 invokeWithinTransaction方法逻辑为开始操作Transaction事务相关的操作，所以这个方法就很重要了，同时提供一个回调操作：invocation.proceed()以达到链式调用。
 
 
 == 事务入口点
-从invokeWithinTransaction方法的代码我们可以看到这时候开始运用事务逻辑，事务包裹着方法的调用。<font color=green>可以说这里是事务的核心和入口</font>。看其代码
+从invokeWithinTransaction方法的代码我们可以看到这时候开始运用事务逻辑，事务包裹着方法的调用。 *可以说这里是事务的核心和入口*。看其代码
 
 ----
 protected Object invokeWithinTransaction(Method method, Class<?> targetClass, final InvocationCallback invocation)
@@ -204,18 +207,18 @@ protected Object invokeWithinTransaction(Method method, Class<?> targetClass, fi
 		······
 	}
 }
-
 ----
+
 从代码我们知道，整个方法的核心逻辑和我们平时对事务的理解一样，
 分为三步：
+
 1. 调方法前开始事务[即代码(4)]
 2. 开始调用方法[即代码(5)]
 3. 方法报错就回滚[即代码(6)]，正常结束提交事务[即代码(7)]
 
-只是在开始事务前我们要获取到事务属性(TransactionAttribute)[即代码(1)]和事务管理器(PlatformTransactionManager)[即代码(2)]。所以首先是从TransactionAttributeSource(其实是AnnotationTransactionAttributeSource)获取TransactionAttribute，这个就是程序初始化时解析UserServiceImpl方法时每个方法生成的TransactionAttribute，现在只是从缓存中取出来。接着获取TransactionManager，其实通过`defaultTransactionManager = this.beanFactory.getBean(PlatformTransactionManager.class);`，即beanFactory容器获取的。我们使用的是默认的PlatformTransactionManager，所以获取到的是DataSourcePlatformTransactionManager。
+只是在开始事务前我们要获取到事务属性(TransactionAttribute)[即代码(1)]和事务管理器(PlatformTransactionManager)[即代码(2)]。所以首先是从TransactionAttributeSource(其实是AnnotationTransactionAttributeSource)获取TransactionAttribute，这个就是程序初始化时解析UserServiceImpl方法时每个方法生成的TransactionAttribute，现在只是从缓存中取出来。接着获取TransactionManager，其实通过 `defaultTransactionManager = this.beanFactory.getBean(PlatformTransactionManager.class);` ，即beanFactory容器获取的。我们使用的是默认的PlatformTransactionManager，所以获取到的是DataSourcePlatformTransactionManager。
 
 下面我们看第一步：获取事务。获取事务是根据事务管理器，事务属性，方法全限定名，看下createTransactionIfNecessary内部逻辑
-
 
 ----
 protected TransactionInfo createTransactionIfNecessary(
@@ -235,8 +238,8 @@ protected TransactionInfo createTransactionIfNecessary(
 	// 准备事务信息对象，并把事务信息对象绑定到当前线程上 
 	return prepareTransactionInfo(tm, txAttr, joinpointIdentification, status);
 }
-
 ----
+
 方法中通过事务管理器和事务属性获取事务状态，所谓的事务状态保存了一些属性，这些属性值导向了事务的特性。我们详细说下
 
 ----
@@ -253,7 +256,8 @@ DefaultTransactionStatus
 	private final Object suspendedResources;
 
 ----
-1. Object transaction表示事务对象，实际是DataSourceTransactionObject，拥有ConnectionHolder、previousIsolationLevel等属性，<font color=green>事务实现的本质是多个数据库的操作使用通过连接：Connection</font>。ConnectionHolder包装了Connection对象，TransactionManager通过一个ThreadLocal属性以datasource为key,ConnectionHolder为value的方式持有ConnectionHolder，
+
+1. Object transaction表示事务对象，实际是DataSourceTransactionObject，拥有ConnectionHolder、previousIsolationLevel等属性， *事务实现的本质是多个数据库的操作使用通过连接：Connection* 。ConnectionHolder包装了Connection对象，TransactionManager通过一个ThreadLocal属性以datasource为key,ConnectionHolder为value的方式持有ConnectionHolder，
 
 2. newTransaction事务有传播特性，如果是嵌套事务，那么第一个事务就是新的(newTransaction=true)，嵌套内的事务就是旧的(newTransaction=false)
 
@@ -309,10 +313,9 @@ public final TransactionStatus getTransaction(TransactionDefinition definition) 
 		return prepareTransactionStatus(definition, null, true, newSynchronization, debugEnabled, null);
 	}
 }
-
 ----
 
-从这个方法的逻辑可以看到，先获取事务对象(此时很多属性还没有赋值)，然后判断这个事务是否是已存在的，是走已存在的逻辑；不是的话，使用这个事务对象创建一个新的事务状态对象TransactionStatus,然后根据TransactionDefinition(持有隔离级别和传播特性值)的个属性值给事务对象DataSourceTransactionObject的各个属性赋值。同时将ConnectionHolder和DataSourece和绑定到TransactionStatus和TransactionSynchronizationManager对象上。接着根据事务状态和事务定义实例化transaction synchronization并赋值给事务管理器。
+从这个方法的逻辑可以看到，先获取事务对象(此时很多属性还没有赋值)，然后判断这个事务是否是已存在的，是走已存在的逻辑；不是的话，使用这个事务对象创建一个新的事务状态对象TransactionStatus,然后根据TransactionDefinition(持有隔离级别和传播特性值)的个属性值给事务对象DataSourceTransactionObject的各个属性赋值。同时将ConnectionHolder和DataSourece和绑定到TransactionStatus和TransactionSynchronizationManager对象上。接着根据事务状态和事务定义实例化transaction synchronization并赋值给事务管理器。
 
 这样事务状态就确定了，即事务状态TransactionStatus对象创建好了。然后根据创建好的事务对象和事务属性创建事务信息对象TransactionInfo。这个对象囊括了事务相关的所有信息，包括事务管理器，事务属性，事务状态，老事务。属性如下：
 
@@ -329,6 +332,7 @@ TransactionInfo class
 	private TransactionInfo oldTransactionInfo;
 
 ----
+
 到这，事务信息就都设置完了，第一步也执行完了。下面走第二步，调用我们实际的业务方法，即userService.updateSchoolName方法。这里就不展开了。
 
 下面如果业务方法执行正常结果，就提交事务，即commitTransactionAfterReturning方法；如果出现异常，则执行completeTransactionAfterThrowing方法逻辑。两种情况走完的后，都会调用cleanupTransactionInfo方法清除对象，释放内存。
@@ -408,10 +412,8 @@ private void processCommit(DefaultTransactionStatus status) throws TransactionEx
 		cleanupAfterCompletion(status);
 	}
 }
-
 ----
 对于processCommit方法，核心是doCommit操作，在这前后根据执行newSynchronization和NewTransaction触发回调操作
-
 
 接着看第二种情况，即出现异常执行completeTransactionAfterThrowing方法逻辑。看其代码实现
 
@@ -438,8 +440,8 @@ protected void completeTransactionAfterThrowing(TransactionInfo txInfo, Throwabl
 		}
 	}
 }
-
 ----
+
 我们平时可能会听到其他人说spring事务默认只有运行时已成RuntimeException才回滚，像非运行时异常不回滚，我看下这里回滚的逻辑，从而知道这个现象的本质原因，看代码
 
 ----
@@ -465,12 +467,14 @@ public boolean rollbackOn(Throwable ex) {
 
 	return !(winner instanceof NoRollbackRuleAttribute);
 }
-
 ----
+
 这个方法的返回值决定了事务回滚，而返回值由两种情况决定
 1. 情况一，业务方法中配置了@Transactional.rollbackfor的值
 从而List<RollbackRuleAttribute>类型的属性rollbackRules有值，所以RollbackRuleAttribute.exceptionName属性有值，值为我们在业务方法上配置的@Transactional.rollbackfor的exception值，对比如下图，更清晰
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091020.png[20201129091020]
+
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091044.png[20201129091044]
 
@@ -487,11 +491,12 @@ private int getDepth(Class<?> exceptionClass, int depth) {
 	}
 	return getDepth(exceptionClass.getSuperclass(), depth + 1);
 }
-
 ----
+
 这是一个递归方法，首先比较我们配置的ExceptionName和程序产生的异常name，如果直接包含，返回默认的depth值(默认为0，表示精准匹配)，如果产生的异常时Throwable，表示不匹配，两种情况都不符合，进入递归操作，拿到程序产生异常类的父类进行以上逻辑的判断。
 
 1. 情况二 我们没有配置业务方法中的@Transactional.rollbackfor的值时，情形如下图。
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091218.png[20201129091218]
 
 没有配置@Transactional.rollbackfor的值，winner == null，所以程序走super.rollbackOn(ex)，即spring事务默认的回滚逻辑。看下这个代码逻辑
@@ -501,11 +506,11 @@ DefaultTransactionAttribute 类
 public boolean rollbackOn(Throwable ex) {
 	return (ex instanceof RuntimeException || ex instanceof Error);
 }
-
 ----
+
 方法逻辑为是RuntimeException才回滚。
 
-到这里我们就明白了，<font color=green>为什么说spring事务默认只有运行时异常RuntimeException才回滚，像非运行时异常不回滚，所以平时在实际的开发过程中，写事务时记得配置@Transactional.rollbackfor，这样任何异常都会执行回滚操作了</font>
+到这里我们就明白了， *为什么说spring事务默认只有运行时异常RuntimeException才回滚，像非运行时异常不回滚，所以平时在实际的开发过程中，写事务时记得配置@Transactional.rollbackfor，这样任何异常都会执行回滚操作了*
 
 
 
@@ -516,7 +521,6 @@ public boolean rollbackOn(Throwable ex) {
 1. 平时总是spring默认的事务只有运行时异常才回滚，为什么
 2. 事务的savepoint是什么
 3. 如何做到多个数据操作的事务提交和回滚的
-
 ----
 回答：
 
@@ -524,13 +528,14 @@ public boolean rollbackOn(Throwable ex) {
 1. RuleBasedTransactionAttribute.rollbackOn(Throwable ex)方法解释了这个问题的本质，文中也有详细的分析和阐述
 2. 事务的savepoint是什么 TODO
 3. 事务具有传播特性，同一个事务对数据库的连接Connection的是相同的，本质的通过Connection.commit和Connection.rollback实现的
-
 ----
 
 
 == spring transaction 关键词
-0. AbstractPlatformTransactionManager
+0.AbstractPlatformTransactionManager
+
 spring标准事务工作流的基础类，作为具体事务管理器的基础。这个基础类提供以下的工作流的处理：
+
 . 判断是否有一个存在的事务
 . 应用合适的传播行为
 . 暂停suspend和重新使用resume事务if necessary
@@ -569,20 +574,20 @@ DefaultTransactionStatus
 	private Object savepoint; 保存点，用于嵌套事务时
 
 	private final Object suspendedResources; 暂停的资源：事务，当多个事务时起作用
-
 ----
 
-7. TransactionInfo
+7.TransactionInfo
 
 ----
 拥有PlatformTransactionManager,TransactionAttribute,TransactionStatus,oldTransactionInfo等属性
-
 ----
 
 这几个对象间的关系通过图的方法
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091326.png[20201129091326]
 
 ## 调用链图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091348.png[20201129091348]
 
 == 扩展
@@ -591,5 +596,4 @@ image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/202
 
 ----
 Transaction Synchronization. The Java Transaction API includes a javax.transaction.Synchronization interface, which issues notifications before and after a transaction is completed. ... After the transaction is committed or rolled back, the TransactionManager calls the Synchronization object's afterCompletion() method.
-
 ----

@@ -17,7 +17,7 @@
 Doc writer yaoyihao1@gmail.com
 
 == 前提
-如果你已经很了解`springbooot中bean post-processor的原理和使用`，本文向你展示了一个精简版和可视化图谱；如果你很想了解它，本文提供你梯子快速的走入`bean post-processor`原理和应用。以减少你原本需要花费的时间
+如果你已经很了解 `springbooot中bean post-processor的原理和使用`，本文向你展示了一个精简版和可视化图谱；如果你很想了解它，本文提供你梯子快速的走入 `bean post-processor`原理和应用。以减少你原本需要花费的时间
 本文的结构为图+文本结合的方式阐述
 
 == 知识点收获
@@ -28,21 +28,22 @@ Doc writer yaoyihao1@gmail.com
 4. BeanPostProcessor类型对象在spring ioc时的应用
 
 
-图中展示了`spring(boot)中post-processor`应用在`BeanDefinition转为BeanInstance再为Proxy代理类`整体的流程，包括哪个方法应用了具体的哪个post-processor，以达到什么目的或作用。
+图中展示了 `spring(boot)中post-processor`应用在 `BeanDefinition转为BeanInstance再为Proxy代理类`整体的流程，包括哪个方法应用了具体的哪个post-processor，以达到什么目的或作用。
 
 看完图中的图例后再看正图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/springboot%20post-processor%E5%BA%94%E7%94%A8%E5%9C%A8%20BeanDefinition%E8%BD%AC%E4%B8%BABeanInstance%E5%86%8D%E4%B8%BAProxy%E4%BB%A3%E7%90%86%E7%B1%BB.png[springboot post-processor应用在 BeanDefinition转为BeanInstance再为Proxy代理类.png]
 
 == 正文
-现在，我们结合图的基础上，阐述`eanPostProcessor`的家族和使用
+现在，我们结合图的基础上，阐述 `beanPostProcessor` 的家族和使用
 
 === BeanPostProcessor作用
-`BeanPostProcessor`是`spring框架`中非常重要的类，每一个放到`spring ioc`中的bean的创建过程都有他的身影。俗称前置处理和后置处理，意思为在bean的创建前后可以增加自定义的处理逻辑。如，bean创建前给某个类型的bean增加一个属性值，在bean创建后生成这个bean的代理类放到spring ioc中等等
+`BeanPostProcessor` 是 `spring框架` 中非常重要的类，每一个放到 `spring ioc` 中的bean的创建过程都有他的身影。俗称前置处理和后置处理，意思为在bean的创建前后可以增加自定义的处理逻辑。如，bean创建前给某个类型的bean增加一个属性值，在bean创建后生成这个bean的代理类放到spring ioc中等等
 
-注意： `BeanPostProcessor`是在`spring容器`加载了`bean的定义文件并且实例化bean之后执行的`。 `BeanPostProcessor`的执行顺序是在`BeanFactoryPostProcessor`之后。关于`BeanPostProcessor vs BeanFactoryPostProcessor`，参见[BeanFactoryPostProcessory与BeanPostProcessor区别](?)
+注意： `BeanPostProcessor`是在 `spring容器` 加载了 `bean的定义文件并且实例化bean之后执行的`。 `BeanPostProcessor` 的执行顺序是在 `BeanFactoryPostProcessor` 之后。关于 `BeanPostProcessor vs BeanFactoryPostProcessor` ，参见[BeanFactoryPostProcessory与BeanPostProcessor区别](?)
 
 === BeanPostProcessor中其每个方法的应用场景
-看`BeanPostProcessor`类结构
+看 `BeanPostProcessor` 类结构
 ----
 public interface BeanPostProcessor {
     /**
@@ -76,9 +77,9 @@ public interface BeanPostProcessor {
 	}
 }
 ----
-`BeanPostProcessor`有个经常使用的子类型：`InstantiationAwareBeanPostProcessor`，看其结构
+`BeanPostProcessor` 有个经常使用的子类型：`InstantiationAwareBeanPostProcessor`，看其结构
 
-`InstantiationAwareBeanPostProcessor比BeanPostProcessor多的功能是：adds a before-instantiation callback,
+`InstantiationAwareBeanPostProcessor` 比 `BeanPostProcessor` 多的功能是： `adds a before-instantiation callback,
 and a callback after instantiation but before explicit properties are set or autowiring occurs` 
 
 典型的使用场景如 `create proxies with special TargetSources (pooling targets, lazily initializing targets, etc), or to implement additional injection strategies
@@ -123,9 +124,11 @@ public interface InstantiationAwareBeanPostProcessor extends BeanPostProcessor {
 从开篇的图中可看出，`bean的创建(beanDefinition->beanInstance->proxy)与post-processor紧密的交织在一起`。如何正确的使用他们成为难点和关键点
 
 === BeanPostProcessor家族成员
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191201203038.png[20191201203038.png]
 
-`Spring`中内置了很多的`BeanPostProcesso`r实现类，列举的都是我们熟悉的，他们给出了很好的使用例子，为我们使用`BeanPostProcessor`去实现我们的自己场景和应用提供了参考的姿势
+`Spring` 中内置了很多的 `BeanPostProcessor` 实现类，列举的都是我们熟悉的，他们给出了很好的使用例子，为我们使用`BeanPostProcessor`去实现我们的自己场景和应用提供了参考的姿势
+
 ----
 BeanPostProcessor
 --ConfigurationPropertiesBindingPostProcessor 参数绑定相关的应用
@@ -154,10 +157,11 @@ BeanPostProcessor
 由你来完成
 
 == it`s time to summary
-开篇图几个`BeanPostProcessor`子类型与bean创建的交互关系，通过它你可以很明晰的了解到`post-processor`在`bean`创建的不同阶段应用的方法。相信对你了解bean的创建提供了很好的可视化
-；同时，文中详述了`BeanPostProcessor`和`InstantiationAwareBeanPostProcessor`的`BeforeInstantiation、AfterInstantiation、BeforeInitialization、AfterInitialization、postProcessProperties`方法的应用场景和应用时机，希望可以引导出合适的使用姿势
-；最后，列举了常用的`BeanPostProcessor`实现类型，简述了主要使用场景。每个`BeanPostProcessor`实现类型的详细使用希望你自己完成从而真正体会`BeanPostProcessor`的用法
+开篇图几个 `BeanPostProcessor` 子类型与bean创建的交互关系，通过它你可以很明晰的了解到 `post-processor` 在 `bean` 创建的不同阶段应用的方法。相信对你了解bean的创建提供了很好的可视化
+；同时，文中详述了 `BeanPostProcessor` 和 `InstantiationAwareBeanPostProcessor` 的 `BeforeInstantiation、AfterInstantiation、BeforeInitialization、AfterInitialization、postProcessProperties` 方法的应用场景和应用时机，希望可以引导出合适的使用姿势
+；最后，列举了常用的 `BeanPostProcessor` 实现类型，简述了主要使用场景。每个 `BeanPostProcessor` 实现类型的详细使用希望你自己完成从而真正体会 `BeanPostProcessor` 的用法
 
 
 一张**图片relax你的思绪
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20191203081016.png[20191203081016.png]

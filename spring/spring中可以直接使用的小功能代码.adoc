@@ -1,4 +1,4 @@
-= spring中可以直接使用的小功能代码
+= spring中可以直接使用的代码块
 :toc: left
 :toc-title: 目录
 :tip-caption: 💡

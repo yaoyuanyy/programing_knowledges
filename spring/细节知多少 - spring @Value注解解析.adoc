@@ -17,11 +17,11 @@ Doc writer yaoyihao1@gmail.com
 
 == 缘由
 
-​@Value是开发过程中使用比较频繁的注解之一，它的作用是将配置文件中key对应的值赋值给它标注的属性。对于常见的知识点，我们应该了解它功能实现的本质。对我们自己的技术提升很有帮助。
+​`@Value` 是开发过程中使用比较频繁的注解之一，它的作用是将配置文件中key对应的值赋值给它标注的属性。对于常见的知识点，我们应该了解它功能实现的本质。对我们自己的技术提升很有帮助。
 
 == 原理
 
-​在spring中是由`AutowiredAnnotationBeanPostProcessor`解析处理@Value注解。`AutowiredAnnotationBeanPostProcessor`是一个`BeanPostProcessor`，所以每个类的实例化都过经过`AutowiredAnnotationBeanPostProcessor`类。当`post-processor`处理bean时，会解析bean Class的所有属性，在解析时会判断属性上是否标有`@Value`注解，有就解析这个`@Value`的属性值，将解析后结果放入`AutowiredFieldElement`类型`InjectionMetaData.checkedElements`中，当给属性赋值时会使用`checkedElements`，从而得到`@Value`注解的`Filed`属性，调用`AutowiredFieldElement.inject()`方法进行解析，解析时会使用`DefaultListableBeanFactory`(用于解析${})和`TypeConverter`(用于类型转换)，从而得到`age`属性的值，最后调用`field.set(bean, value)`，从而获取的值赋给`bean的field`。
+​在spring中是由 `AutowiredAnnotationBeanPostProcessor` 解析处理 `@Value` 注解。 `AutowiredAnnotationBeanPostProcessor` 是一个 `BeanPostProcessor` ，所以每个类的实例化都过经过 `AutowiredAnnotationBeanPostProcessor` 类。当 `post-processor` 处理bean时，会解析bean Class的所有属性，在解析时会判断属性上是否标有 `@Value` 注解，有就解析这个 `@Value` 的属性值，将解析后结果放入 `AutowiredFieldElement` 类型 `InjectionMetaData.checkedElements` 中，当给属性赋值时会使用 `checkedElements` ，从而得到 `@Value` 注解的 `Filed` 属性，调用 `AutowiredFieldElement.inject()` 方法进行解析，解析时会使用 `DefaultListableBeanFactory` (用于解析${})和 `TypeConverter` (用于类型转换)，从而得到 `age` 属性的值，最后调用 `field.set(bean, value)` ，从而获取的值赋给 `bean的field`。
 
 ​整个过程就是这样，有点抽象吧，下面我们一起debug源码，更清晰简明的了解@Value的原理。
 
@@ -58,7 +58,7 @@ public class MyController {
 
 > 核心：存。将class的标注@Value的所有信息转存InjectionMetadata.InjectedElement集合中
 
-`@Value`同@`Autowired`一样，是由`AutowiredAnnotationBeanPostProcessor`解析处理，处理`@Value`的入口为`AutowiredAnnotationBeanPostProcessor.buildAutowiringMetadata(Class clazz)`。看代码内部
+`@Value` 同@ `Autowired` 一样，是由 `AutowiredAnnotationBeanPostProcessor` 解析处理，处理 `@Value` 的入口为 `AutowiredAnnotationBeanPostProcessor.buildAutowiringMetadata(Class clazz)` 。看代码内部
 
 ----
 AutowiredAnnotationBeanPostProcessor class
@@ -105,7 +105,7 @@ private InjectionMetadata buildAutowiringMetadata(final Class<?> clazz) {
 }
 ----
 
-这个方法用于遍历和解析clazz的所有filed和method，解析其上的`@Value`、`@Autowired`、`@Inject`注解，然后放入类型为`InjectionMetadata.InjectedElement`的`elements`中，`elements`再放入`metadata(=new InjectionMetadata(clazz, elements)) `中。再将`metadata`放入缓存`injectionMetadataCache`中，后面会从缓存中取值
+这个方法用于遍历和解析clazz的所有filed和method，解析其上的 `@Value` 、 `@Autowired` 、 `@Inject` 注解，然后放入类型为 `InjectionMetadata.InjectedElement` 的 `elements` 中， `elements` 再放入 `metadata(=new InjectionMetadata(clazz, elements))` 中。再将 `metadata` 放入缓存 `injectionMetadataCache` 中，后面会从缓存中取值
 
 下面，我们重点看属性的解析过程，代码如下
 
@@ -124,19 +124,19 @@ private AnnotationAttributes findAutowiredAnnotation(AccessibleObject ao) {
 }
 ----
 
-`autowiredAnnotationTypes`包含了`@Value`、`@Autowired`、`@Inject`。如果属性解析到了响应注解，就将注解的信息返回给上层。解析注解过程这里不详细说了
+`autowiredAnnotationTypes` 包含了 `@Value` 、 `@Autowired` 、 `@Inject` 。如果属性解析到了响应注解，就将注解的信息返回给上层。解析注解过程这里不详细说了
 
 
 
 === 解析
 
->>>>>> 核心：用。使用InjectionMetadata.InjectedElement，解析并赋值给clazz的属性，即赋值MyController.age
+> 核心：使用InjectionMetadata.InjectedElement，解析并赋值给clazz的属性，即赋值MyController.age
 
-上面的逻辑主要为解析@Value的信息存入`InjectionMetadata.InjectedElement`集合，下面的逻辑为使用`InjectionMetadata.InjectedElement`，解析出真正的值，从而赋值给属性。下面看看怎么解析并赋值的
+上面的逻辑主要为解析@Value的信息存入 `InjectionMetadata.InjectedElement` 集合，下面的逻辑为使用 `InjectionMetadata.InjectedElement` ，解析出真正的值，从而赋值给属性。下面看看怎么解析并赋值的
 
 
 
-首先，我们通过获取`InjectionMetadata.InjectedElement`对象数据，其实是从`injectionMetadataCache`缓存中获取的。获取的地点代码如下
+首先，我们通过获取 `InjectionMetadata.InjectedElement` 对象数据，其实是从 `injectionMetadataCache` 缓存中获取的。获取的地点代码如下
 
 ----
 AutowiredAnnotationBeanPostProcessor class
@@ -162,7 +162,7 @@ public void inject(Object target, @Nullable String beanName, @Nullable PropertyV
 }
 ----
 
-方法逻辑很简单，遍历集合分别调用`inject()`方法。看其内部代码逻辑
+方法逻辑很简单，遍历集合分别调用 `inject()` 方法。看其内部代码逻辑
 
 ----
 InjectionMetadata.InjectedElement class
@@ -190,7 +190,7 @@ protected void inject(Object bean, @Nullable String beanName, @Nullable Property
 }
 ----
 
-方法的核心为使用`DependencyDescriptor`包装field，使用`beanFactory`解析`DependencyDescriptor`从而得到属性值。下面看其`beanFactory.resolveDependency()`内部代码。(注：`beanFactory`是通过`BeanFactoryAware`注入的，我们可学习这种用法)
+方法的核心为使用 `DependencyDescriptor` 包装field，使用 `beanFactory` 解析 `DependencyDescriptor` 从而得到属性值。下面看其 `beanFactory.resolveDependency()` 内部代码。(注： `beanFactory` 是通过 `BeanFactoryAware` 注入的，我们可学习这种用法)
 
 ----
 DefaultListableBeanFactory class
@@ -214,9 +214,9 @@ public Object resolveDependency(DependencyDescriptor descriptor, @Nullable Strin
 }
 ----
 
-从方法的入参可以看到，这个类型转换器`TypeConverter`已经传进来了，需要类型转换时就使用`TypeConverter`它进行转换，`TypeConverter`是从`BeanFactory.getTypeConverter()`获取来的。
+从方法的入参可以看到，这个类型转换器 `TypeConverter` 已经传进来了，需要类型转换时就使用 `TypeConverter` 它进行转换， `TypeConverter` 是从 `BeanFactory.getTypeConverter()` 获取来的。
 
-<font color="green"> ***doResolveDependency()解析@Value注解的大管家，它不负责具体解析，但它说明了解析的整个流程*** </font>。看`doResolveDependency()`方法代码逻辑
+*doResolveDependency()解析@Value注解的大管家，它不负责具体解析，但它说明了解析的整个流程* 。看 `doResolveDependency()` 方法代码逻辑
 
 ----
 DefaultListableBeanFactory class
@@ -256,11 +256,11 @@ public Object doResolveDependency(DependencyDescriptor descriptor, @Nullable Str
 
 
 
-此方法为解析`@Value`注解属性值的核心方法了。逻辑分为四步：
+此方法为解析 `@Value` 注解属性值的核心方法了。逻辑分为四步：
 
-1. 获取(不只是)`@Value`注解的value方法的值。通过`descriptor`解析出注解的`value方法`的值
+1. 获取(不只是) `@Value` 注解的value方法的值。通过 `descriptor` 解析出注解的 `value方法` 的值
 2. 开始解析value的值
-3. 如果值为String类型，会特殊的解析这个值，特殊解析的意思是如果值为` ${test.age:11}`，会解析出值为: `"11"`，这个解析过程使用的是`PropertySourcesPlaceholderConfigurer.processProperties()`方法
+3. 如果值为String类型，会特殊的解析这个值，特殊解析的意思是如果值为 `${test.age:11}` ，会解析出值为:  `"11"` ，这个解析过程使用的是 `PropertySourcesPlaceholderConfigurer.processProperties()` 方法
 
 说的有点抽象，举个例子。如下，定义了一个@Value注解的变量
 
@@ -277,7 +277,7 @@ private int age;
 
 ==== one step
 
-首先详细了解下第一步。获取`@Value的value()`方法的值
+首先详细了解下第一步。获取 `@Value的value()` 方法的值
 
 ----
 
@@ -305,11 +305,11 @@ protected Object findValue(Annotation[] annotationsToSearch) {
 
 ----
 
-以上两个方法主要是解析`@Value`注解，再通过`AnnotatedElementUtils.getMergedAnnotationAttributes()`方法得到注解的属性集合，从而获取到`value()`方法的值
+以上两个方法主要是解析 `@Value` 注解，再通过 `AnnotatedElementUtils.getMergedAnnotationAttributes()` 方法得到注解的属性集合，从而获取到 `value()` 方法的值
 
 ==== two step
 
-解析传入的${key:defaultValue}形式的字符串，从而得到key的实际的值。
+解析传入的 `${key:defaultValue}` 形式的字符串，从而得到key的实际的值。
 
 ----
 public String resolveEmbeddedValue(@Nullable String value) {
@@ -321,7 +321,7 @@ public String resolveEmbeddedValue(@Nullable String value) {
 }
 ----
 
-核心方法为`resolver.resolveStringValue(result)`方法，resolver实际为`StringValueResolver类型的lambda表达式`，这个表示式定义在了`PropertySourcesPlaceHolderConfigurer.processProperties()`方法中，这里debug是需要注意下，如果你不了解lambda，可能会比较朦胧。代码如下
+核心方法为 `resolver.resolveStringValue(result)` 方法，resolver实际为 `StringValueResolver类型的lambda表达式` ，这个表示式定义在了 `PropertySourcesPlaceHolderConfigurer.processProperties()` 方法中，这里debug是需要注意下，如果你不了解lambda，可能会比较朦胧。代码如下
 
 ----
 PropertySourcesPlaceHolderConfigurer class
@@ -350,7 +350,7 @@ lambda会扰乱你的调用栈展示，下面截图展示真实调用栈的信�
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029203940.png[20201029203940]
 
-上面代码中`processProperties`方法会调用`PropertySourcesPropertyResolver.resolveRequiredPlaceholders()`方法来解析入参，而它又会调用`PropertySourcesPropertyResolver.getPropertyAsRawString()`和`PropertyPlaceholderHelper.replacePlaceholders()`。代码如下
+上面代码中 `processProperties` 方法会调用 `PropertySourcesPropertyResolver.resolveRequiredPlaceholders()` 方法来解析入参，而它又会调用 `PropertySourcesPropertyResolver.getPropertyAsRawString()` 和 `PropertyPlaceholderHelper.replacePlaceholders()` 。代码如下
 
 ----
 AbstractPropertyResoler class
@@ -366,9 +366,9 @@ private String doResolvePlaceholders(String text, PropertyPlaceholderHelper help
 }
 ----
 
-> PropertySourcesPropertyResolver.getPropertyAsRawString()方法逻辑
+=== PropertySourcesPropertyResolver.getPropertyAsRawString()方法逻辑
 
-`PropertySourcesPropertyResolver.getPropertyAsRawString()`负责获取key的值，因为`PropertySourcesPropertyResolver.持有propertySources变量`，这个变量与`Environment的propertySources`变量是同步的，所以`propertySource.getProperty(key)`可以获取到配置文件中的值，代码如下
+`PropertySourcesPropertyResolver.getPropertyAsRawString()` 负责获取key的值，因为 `PropertySourcesPropertyResolver.持有propertySources变量` ，这个变量与 `Environment的propertySources` 变量是同步的，所以 `propertySource.getProperty(key)` 可以获取到配置文件中的值，代码如下
 
 ----
 PropertySourcesPropertyResolver class
@@ -397,11 +397,11 @@ protected <T> T getProperty(String key, Class<T> targetValueType, boolean resolv
 }
 ----
 
-可以看到，最后`propertySource.getProperty(key)`获取值返回。
+可以看到，最后 `propertySource.getProperty(key)` 获取值返回。
 
-> PropertyPlaceholderHelper.replacePlaceholders()方法逻辑
+=== PropertyPlaceholderHelper.replacePlaceholders()方法逻辑
 
-`PropertyPlaceholderHelper.replacePlaceholders()`负责解析`${key: defaultValue}`，将它拆解以获取key，再用`propertySource.getProperty(key)`获取值。而具体的拆解逻辑在`parseStringValue()`方法中，代码如下
+`PropertyPlaceholderHelper.replacePlaceholders()` 负责解析 `${key: defaultValue}` ，将它拆解以获取key，再用 `propertySource.getProperty(key)` 获取值。而具体的拆解逻辑在 `parseStringValue()` 方法中，代码如下
 
 ----
 public String replacePlaceholders(String value, PlaceholderResolver placeholderResolver) {
@@ -432,13 +432,13 @@ protected String parseStringValue(
 
 
 
-可以看到这个key一个拆解一层得到一个新key，尝试调用`placeholderResolver.resolvePlaceholder(新key)`获取值，如果没有获取到，再拆解一层得到一个新key，再调用`placeholderResolver.resolvePlaceholder(新key)`获取值的循环过程，直到获取到获取不能拆解为止的过程(因为key的形式可以是${xx:${yy:zz}})。此时得到的值时String类型的。并不是我们赋值变量的类型，所以接下来进行类型转换。
+可以看到这个key一个拆解一层得到一个新key，尝试调用 `placeholderResolver.resolvePlaceholder(新key)` 获取值，如果没有获取到，再拆解一层得到一个新key，再调用 `placeholderResolver.resolvePlaceholder(新key)` 获取值的循环过程，直到获取到获取不能拆解为止的过程(因为key的形式可以是${xx:${yy:zz}})。此时得到的值时String类型的。并不是我们赋值变量的类型，所以接下来进行类型转换。
 
 === Three step
 
 将String类型的值转换成目标变量声明的类型。
 
-我们回到`DefaultListableBeanFactory.doResolveDependency()`方法，此时代码来到了`converter.convertIfNecessary`方法处，即类型转换。看方法代码
+我们回到 `DefaultListableBeanFactory.doResolveDependency()` 方法，此时代码来到了 `converter.convertIfNecessary` 方法处，即类型转换。看方法代码
 
 ----
 TypeConverterSupport class
@@ -461,12 +461,12 @@ public <T> T convertIfNecessary(@Nullable String propertyName, @Nullable Object 
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029204039.png[20201029204039]
 
-方法首先找到能转换(string -> int)的转换器，然后开始转换。怎么找到能转换的转换器这里不说了，自己跟下吧。开始转换的核心是确定对应的`xxxtoyyyConverter`, `xxxtoyyyConverter`内部调用的是本质的工具类。如String转int，工具类为: `NumberUtils.parseNumber(source, this.targetType)`，这个工具类方法比较熟悉和亲切吧，所以spring很多功能最终都是调用最本质的java工具类。`xxxtoyyyConverter`是一大堆的，如下图
+方法首先找到能转换(string -> int)的转换器，然后开始转换。怎么找到能转换的转换器这里不说了，自己跟下吧。开始转换的核心是确定对应的 `xxxtoyyyConverter` ,  `xxxtoyyyConverter` 内部调用的是本质的工具类。如String转int，工具类为:  `NumberUtils.parseNumber(source, this.targetType)` ，这个工具类方法比较熟悉和亲切吧，所以spring很多功能最终都是调用最本质的java工具类。 `xxxtoyyyConverter` 是一大堆的，如下图
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201029204117.png[20201029204117]
 
 
-以上就是将`@Value`修饰的变量赋值的整个过程了，从解析注解的`value()`方法的值key，再到解析key为新key，再到配置文件获取key(新key)的值，最后对获取的值进行类型转换，最最后通过`field.set(bean, value)`赋值给目标变量
+以上就是将 `@Value` 修饰的变量赋值的整个过程了，从解析注解的 `value()` 方法的值key，再到解析key为新key，再到配置文件获取key(新key)的值，最后对获取的值进行类型转换，最最后通过 `field.set(bean, value)` 赋值给目标变量
 
 
 

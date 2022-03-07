@@ -28,7 +28,6 @@ Doc writer yaoyihao1@gmail.com
 ----
 
 >   原：Spring Boot is a framework for packaging the spring application with sensible defaults. What does this mean?. You are developing a web application using Spring MVC, Spring Data, Hibernate and Tomcat. How do you package and deploy this application to your web server. As of now, we have to manually write the configurations, XML files, etc. for deploying to web server.
-<!-- more -->
 
 >   译：springboot是一个包装了带有智能默认配置的spring应用的框架。什么意思？假如你正在用springmvc, Spring Data, Hibernate and  
 Tomcat开发一个web应用，你怎样打包和发布这个应用到你的server服务器呢，到目前为止，我们必须手动的写像xml文件这样的配置用于发布到web服务器。

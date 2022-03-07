@@ -32,7 +32,8 @@ https://yaoyuanyy.github.io/2019/04/28/%E7%BB%86%E8%8A%82%E6%8A%A0%E5%87%BA%E8%A
 
 == 带着问题学习
 
-> 带着问题学习往往起到更好的效果
+[tip]
+带着问题学习往往起到更好的效果
 
 
 
@@ -73,7 +74,7 @@ public class UserController {
 }
 ----
 
-同上一篇一样，我们定义一个Aspect类，目的是对`com.yy..rest`包下所有的方法的访问都被切面切入，也就是要走`doTimeFeeIntercepter()`方法。同时，在com.yy.rest包下定义了一个类：UserController，充当目标类：targetClass，声明了一个方法：test()，从而在访问这个方法时，会被doTimeFeeIntercepter()方法切入
+同上一篇一样，我们定义一个Aspect类，目的是对 `com.yy..rest` 包下所有的方法的访问都被切面切入，也就是要走 `doTimeFeeIntercepter()` 方法。同时，在 com.yy.rest 包下定义了一个类：UserController，充当目标类：targetClass，声明了一个方法：test()，从而在访问这个方法时，会被doTimeFeeIntercepter() 方法切入
 
 下面我们通过debug追踪源码，了解实现原理。
 
@@ -138,19 +139,19 @@ protected Object createProxy(Class<?> beanClass, String beanName, Object[] speci
     return proxyFactory.getProxy(getProxyClassLoader());
 }
 ----
-首先创建了一个`ProxyFactory`，看名字就知道含义：proxy的工厂。注意这句代码`proxyFactory.copyFrom(this)`，其中的this为`AnnotationAwareAspectJAutoProxyCreator`对象，还记得吗，spring项目初始化时，aop相关实例化`xxxProxyAutoConfiguration`就是`AnnotationAwareAspectJAutoProxyCreator`类，他的`proxyTargetClass`和`exposeProxy`等属性通过`proxyFactory.copyFrom(this)`传递给`proxyFactory`属性。
-然后通过`buildAdvisors(beanName, specificInterceptors)`方法构建advisor,看他的`specificInterceptors`参数，往上追溯可以知道是post-process方法传递进来的，结合 https://yaoyuanyy.github.io/2019/04/28/%E7%BB%86%E8%8A%82%E6%8A%A0%E5%87%BA%E8%A1%80%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%B8%89/[spring boot aop过程解析之阶段二：判断beanName或beanClass是否生成Proxy代理类] ，我们可以知道specificInterceptors之一就是`InstantiationModelAwarePointcutAdvisorImpl`实例。所以生成的`advisors`包含`InstantiationModelAwarePointcutAdvisorImpl`实例，同时将`advisors`赋值给`proxyFactory.addAdvisors(advisors)`。接下来，通过`proxyFactory.getProxy(getProxyClassLoader())`生成proxy代理类
+首先创建了一个 `ProxyFactory` ，看名字就知道含义：proxy的工厂。注意这句代码 `proxyFactory.copyFrom(this)` ，其中的this为 `AnnotationAwareAspectJAutoProxyCreator` 对象，还记得吗，spring项目初始化时，aop相关实例化 `xxxProxyAutoConfiguration` 就是 `AnnotationAwareAspectJAutoProxyCreator` 类，他的 `proxyTargetClass` 和 `exposeProxy` 等属性通过 `proxyFactory.copyFrom(this)` 传递给 `proxyFactory` 属性。
+然后通过 `buildAdvisors(beanName, specificInterceptors)` 方法构建advisor，看他的  `specificInterceptors` 参数，往上追溯可以知道是post-process方法传递进来的，结合 https://yaoyuanyy.github.io/2019/04/28/%E7%BB%86%E8%8A%82%E6%8A%A0%E5%87%BA%E8%A1%80%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%B8%89/[spring boot aop过程解析之阶段二：判断beanName或beanClass是否生成Proxy代理类] ，我们可以知道specificInterceptors之一就是 `InstantiationModelAwarePointcutAdvisorImpl` 实例。所以生成的 `advisors` 包含 `InstantiationModelAwarePointcutAdvisorImpl` 实例，同时将 `advisors` 赋值给 `proxyFactory.addAdvisors(advisors)` 。接下来，通过 `proxyFactory.getProxy(getProxyClassLoader())` 生成proxy代理类
 
 == 生成Proxy代理类
-看下`proxyFactory.getProxy(getProxyClassLoader())`内部实现
+看下 `proxyFactory.getProxy(getProxyClassLoader())` 内部实现
 ----
 public Object getProxy(ClassLoader classLoader) {
     return createAopProxy().getProxy(classLoader);
 }
 ----
-只有一行代码，但是确包含很多内容，`createAopProxy()`是一部分；`getProxy(classLoader)`是另一部分
+只有一行代码，但是确包含很多内容， `createAopProxy()` 是一部分； `getProxy(classLoader)` 是另一部分
 
-先说`createAopProxy()`，看内部实现
+先说 `createAopProxy()` ，看内部实现
 ----
 ProxyFactory类
 protected final synchronized AopProxy createAopProxy() {
@@ -176,17 +177,21 @@ public AopProxy createAopProxy(AdvisedSupport config) throws AopConfigException 
     }
 }
 ----
-`createAopProxy方法`正式创建xxxAopProxy了，到底是创建Jdk动态代理还是cglib动态代理呢，看条件，条件之一`proxyTargetClass`的值是我们所能控制的，因为可以在我们的项目启动类中加入类似
-`@EnableAspectJAutoProxy(proxyTargetClass = true, exposeProxy = true)`的配置。这是全局设置。还有每次创建proxy的设置：`shouldProxyTargetClass(beanClass, beanName)`，逻辑为beanName有没有接口，有接口`proxyTargetClass=false`；没有接口，`proxyTargetClass=true`。对于我们开头定义的`UserController`，由于没有接口，所以生成代理时是cglib代理，即`new ObjenesisCglibAopProxy(config)`，看其及父类构造函数
+
+`createAopProxy方法` 正式创建xxxAopProxy了，到底是创建Jdk动态代理还是cglib动态代理呢，看条件，条件之一 `proxyTargetClass` 的值是我们所能控制的，因为可以在我们的项目启动类中加入类似
+ `@EnableAspectJAutoProxy(proxyTargetClass = true, exposeProxy = true)` 的配置。这是全局设置。还有每次创建proxy的设置： `shouldProxyTargetClass(beanClass, beanName)` ，逻辑为beanName有没有接口，有接口 `proxyTargetClass=false` ；没有接口，`proxyTargetClass=true` 。对于我们开头定义的 `UserController` ，由于没有接口，所以生成代理时是cglib代理，即 `new ObjenesisCglibAopProxy(config)` ，看其及父类构造函数
+
 ----
 public CglibAopProxy(AdvisedSupport config){
     this.advised = config;
     this.advisedDispatcher = new AdvisedDispatcher(this.advised);
 }
 ----
-`AdvisedSupport`是`proxyFactory`的父类，`CglibAopProxy`拥有一个`AdvisedSupport`类型的advised属性，而这个advised拥有`advisors`、`proxyTargetClass`、`exposeProxy`等，所以`CglibAopProxy`就等于有了`advisors`、`proxyTargetClass`、`exposeProxy`。
+
+`AdvisedSupport` 是 `proxyFactory` 的父类，`CglibAopProxy` 拥有一个 `AdvisedSupport` 类型的advised属性，而这个advised拥有 `advisors` 、 `proxyTargetClass` 、 `exposeProxy` 等，所以 `CglibAopProxy` 就等于有了 `advisors` 、 `proxyTargetClass` 、 `exposeProxy` 。
 
 aopProxy已经创建了，下面说另一部分：getProxy(classLoader)，看内部代码
+
 ----
 CglibAopProxy类
 public Object getProxy(ClassLoader classLoader) {
@@ -232,13 +237,16 @@ public Object getProxy(ClassLoader classLoader) {
     return createProxyClassAndInstance(enhancer, callbacks);
 }
 ----
-`getProxy()方法会创建一个`Enhancer`对象，这个工具类负责生成代理类的class，只不过这个class不是文本的形式，而是在内存中。`Enhancer`会被赋值生成proxy代理类是用于的属性，说下这些属性即作用
+
+`getProxy()方法会创建一个 `Enhancer` 对象，这个工具类负责生成代理类的class，只不过这个class不是文本的形式，而是在内存中。 `Enhancer` 会被赋值生成proxy代理类是用于的属性，说下这些属性即作
+
 - superclass：目标类
 - Interfaces：目标类和代理类的接口
 - namingPolicy：生成代理类名称策略, 如"xxx\$\$EnhancerBySpringCGLIB$$d2e4a5ae"这个文本形式就是namingPolicy生成的
 - strategy：生成代理类class策略
 - callbackFilter：设置对不同方法执行不同的回调逻辑，或者根本不执行回调
 - callBackTypes：都会赋值给Enhancer对象用于生成Proxy代理类。callBackTypes就是aop interceptor，CGLIB中对于方法的拦截是通过将自定义的拦截器（实现MethodInterceptor接口）加入Callback中并在调用代理时直接激活拦截器中的intercept方法来实现的，DynamicAdvisedInterceptor继承自MethodInterceptor，而包含AspectJMethodBeforeAdvice的advised属性又封装在DynamicAdvisedInterceptor中，DynamicAdvisedInterceptor又赋值到callBack。所以当我们curl访问目标类方法时会被proxy代理类的拦截器拦截，继而会走切面的AspectJMethodBeforeAdvice对象的方法执行切面逻辑。下面就详细下CallbackTypes，看getCallbacks方法代码，如下
+
 ----
 private Callback[] getCallbacks(Class<?> rootClass) throws Exception {
     // Parameters used for optimization choices...
@@ -280,13 +288,18 @@ private Callback[] getCallbacks(Class<?> rootClass) throws Exception {
     Callback[] callbacks;
 }
 ----
-可以看到，`mainCallbacks`是最终生成的callbacks，包含7个callback，属于几类，分别说下
+
+可以看到， `mainCallbacks` 是最终生成的callbacks，包含7个callback，属于几类，分别说下
+
 - DynamicAdvisedInterceptor：核心的aop interceptor，aspect的AspectJMethodBeforeAdvice就被赋值在这里。访问业务方法时就会先访问DynamicAdvisedInterceptor的intercept方法，详情看此方法
 - StaticUnadvisedExposedInterceptor：用于没有advice chain的静态目标
 - SerializableNoOp 什么操作也不做，代理类直接调用被代理的方法不进行拦截
 - Dispatcher 每次调用都会重新加载被代理的对象
-···
-下面看下getProxy方法`createProxyClassAndInstance`方法，这个方法创建proxy class并实例化为instance，看下内部代码
+
+
+
+下面看下getProxy方法 `createProxyClassAndInstance` 方法，这个方法创建proxy class并实例化为instance，看下内部代码
+
 ----
 protected Object createProxyClassAndInstance(Enhancer enhancer, Callback[] callbacks) {
     // 创建class
@@ -385,7 +398,8 @@ public String getClassName(String prefix, String source, Object key, Predicate n
 上述代码着重贴了proxy代理类的名字的生成过程，这是平时你debug代理类时常看见的名字。所以了解名字的生成过程有助于你理解更深层的东西。
 
 === 生成的class文件我们可以输出到.class
-到这，proxy代理类的生成过程就说完了，整个过程生成的代理类都是在内存的，我们可以通过设置，将内存中生成的代理类class字节码输出到硬盘的.class文件中，输出到.class的方法见文末`扩展`部分
+到这，proxy代理类的生成过程就说完了，整个过程生成的代理类都是在内存的，我们可以通过设置，将内存中生成的代理类class字节码输出到硬盘的.class文件中，输出到.class的方法见文末 `扩展` 部分
+
 ----
 package com.yy.rest;
 
@@ -445,6 +459,7 @@ public class UserController$$EnhancerBySpringCGLIB$$bd9c2334 extends UserControl
     ......
 }
 ----
+
 这里只列出了test方法的代码，还有很多其他的方法代码，运行你的代码就可以看到全部了
 
 == 访问业务方法
@@ -452,8 +467,12 @@ public class UserController$$EnhancerBySpringCGLIB$$bd9c2334 extends UserControl
 下面我们看下访问controller方法时是怎样走入代理类的方法的，又怎么进入切面的方法的，最后又是怎么进去目标方法的
 
 在浏览器或者命令行访问链接：http://localhost:20282/user/test。通过下图的调用栈可以看到
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129083820.png[20201129083820]
-首先访问了`UserController`代理类：`UserController\$\$EnhancerBySpringCGLIB$$bd9c2334`的方法，从`UserController\$\$EnhancerBySpringCGLIB\$\$bd9c2334`的源码我们知道，它的test方法内引用了`MethodInterceptor`类型属性，所以调用了`DynamicAdvisedInterceptor.intercept()`方法。我们看下这个方法的内部
+
+
+首先访问了 `UserController` 代理类： `UserController\$\$EnhancerBySpringCGLIB$$bd9c2334` 的方法，从 `UserController\$\$EnhancerBySpringCGLIB\$\$bd9c2334` 的源码我们知道，它的test方法内引用了 `MethodInterceptor` 类型属性，所以调用了 `DynamicAdvisedInterceptor.intercept()` 方法。我们看下这个方法的内部
+
 ----
 public Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
     try {
@@ -479,14 +498,16 @@ public Object intercept(Object proxy, Method method, Object[] args, MethodProxy 
        AopContext.setCurrentProxy(oldProxy);
     }
 }
-
 ----
+
 方法(1)处获取`MethodIntercetor`集合，从而获取对应的`dvice`集合，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129084042.png[20201129084042]
 
 
-方法(2)处创建一个`CglibMethodInvocation`，`CglibMethodInvocation`拥有一个`MethodInterceptor`集合，通过`proceed()`方法执行`interceptor chain`。所有这里运用了一个设计模式：<font color=green size=4>责任链模式的变种</font>，类似`tomcat filter`的形式。
-具体如下，运行这个链的入口是`DynamicAdvisedInterceptor.intercept()`。这个方法会获取interceptor集合，然后创建一个`CglibMethodInvocation`对象，并把interceptor集合传递给`CglibMethodInvocation`对象的`interceptorsAndDynamicMethodMatchers`属性， 然后调用`CglibMethodInvocation`对象的proceed()，proceed()会遍历`interceptorsAndDynamicMethodMatchers(其实就是interceptor集合)`从而执行每个`interceptor.invoke(MethodInvocation)`自身的逻辑，因为这个时候`MethodInvocation`会传递给`invoke`方法，所以每一个`invoke`方法内部都会执行`MethodInvocation.proceed()`，从而这样形成了一个链式的调用关系。我们看下链式代码结构
+方法(2)处创建一个 `CglibMethodInvocation` ， `CglibMethodInvocation` 拥有一个 `MethodInterceptor` 集合，通过 `proceed()` 方法执行 `interceptor chain `。所有这里运用了一个设计模式： *责任链模式的变种*，类似 `tomcat filter` 的形式。
+具体如下，运行这个链的入口是 `DynamicAdvisedInterceptor.intercept()` 。这个方法会获取interceptor集合，然后创建一个 `CglibMethodInvocation` 对象，并把interceptor集合传递给 `CglibMethodInvocation` 对象的 `interceptorsAndDynamicMethodMatchers` 属性， 然后调用 `CglibMethodInvocation` 对象的proceed()，proceed()会遍历 `interceptorsAndDynamicMethodMatchers(其实就是interceptor集合)` 从而执行每个 `interceptor.invoke(MethodInvocation)` 自身的逻辑，因为这个时候 `MethodInvocation` 会传递给 `invoke` 方法，所以每一个 `invoke` 方法内部都会执行 `MethodInvocation.proceed()` ，从而这样形成了一个链式的调用关系。我们看下链式代码结构
+
 ----
 MethodInvocation类
 public Object proceed() throws Throwable {
@@ -518,9 +539,10 @@ todo
 
 
 因为这里我们只有一个interceptor，所以只执行它了，如下图
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129084156.png[20201129084156]
 
-从图中我们知道，调用了`MethodBeforeAdvice.before()`方法，`MethodBeforeAdvice`持有`aspectJAdviceMethod`属性，这个`aspectJAdviceMethod`其实就`TimeFeeAspect.doTimeFeeIntercepter()`方法，所以before方法会进去我们定义的Aspect切面，从而实现了切入方法的功能
+从图中我们知道，调用了 `MethodBeforeAdvice.before()` 方法， `MethodBeforeAdvice` 持有 `aspectJAdviceMethod` 属性，这个 `aspectJAdviceMethod` 其实就 `TimeFeeAspect.doTimeFeeIntercepter()` 方法，所以before方法会进去我们定义的Aspect切面，从而实现了切入方法的功能
 
 == spring aop 关键词
 现在我们走了一遍spring aop生成代理类的逻辑和代码实现方式，感觉门清了。但千万不要忽略时间老人的魔力，不久的以后你可能没有这么清晰的记忆了，一些点可能已经忘记了。这个时候关键词会给你指引和作为回忆的钥匙
@@ -547,17 +569,19 @@ spring aop 关键词
 2. 包含advice：TimeFeeAspect.doTimeFeeIntercepter
 ----
 
-4. MethodInterceptor内部类DynamicAdvisedInterceptor
+4.MethodInterceptor内部类DynamicAdvisedInterceptor
 ----
 DynamicAdvisedInterceptor是interceptor责任链模式的开始处。代理类把它切入到真实对象方法前后，执行切入功能
 ----
 
-5. MethodBeforeAdvice
+5.MethodBeforeAdvice
 
 == 扩展 - jvm内存中生成的代理类class字节码输出到硬盘.class文件
 
 以下两种方法的代码放在main方法中
-==== 方法一
+
+=== 方法一
+
 ----
 该设置用于输出cglib动态代理产生的类
 System.setProperty(DebuggingClassWriter.DEBUG_LOCATION_PROPERTY, "/Users/xx/skyler");
@@ -565,9 +589,9 @@ System.setProperty(DebuggingClassWriter.DEBUG_LOCATION_PROPERTY, "/Users/xx/skyl
 该设置用于输出jdk动态代理产生的类，输出的文件路径为your project下。如我的项目是java_example, $ProxyX.class在java_example/com/sun/proxy/下
 System.getProperties().put("sun.misc.ProxyGenerator.saveGeneratedFiles", "true");
 ----
- 
 
 === 方法二
+
 ----
 writeProxyClass2File("/Users/xx/skyler/project/mytest/java_example/target/classes/com/yy/example/pattern_mode/structure/proxy/dynamic_proxy/spring_aop/$Proxy2.class");
 

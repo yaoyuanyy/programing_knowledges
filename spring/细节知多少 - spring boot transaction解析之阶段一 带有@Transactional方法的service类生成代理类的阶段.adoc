@@ -1,4 +1,4 @@
-= 细节知多少 - spring boot transaction解析之阶段一 带有@Transactional方法的service类生成代理类的阶段:toc: left
+= 细节知多少 - spring boot transaction解析之阶段一 带有@Transactional方法的service类生成代理类的阶段
 :toc-title: 目录
 :tip-caption: 💡
 :note-caption: ℹ️
@@ -19,6 +19,7 @@ Doc writer yaoyihao1@gmail.com
 spring boot transaction我们平时用着非常简单，只需要在service方法上声明@Transactional就可以了。但是要知道，简单的背后是不简单，只是很多东西spring框架帮我们做好了。如果想进阶，想进步，想弄懂，想学习，需要接近它，了解它，弄懂它，最好的方法莫过于debug它的源码了。
 
 笔者把spring boot transaction的整个过程分为两个阶段
+
 1. 带有@Transactional方法的service类生成代理类的阶段
 2. 访问service类的@Transactional方法实现事务的阶段
 
@@ -32,7 +33,6 @@ spring boot transaction我们平时用着非常简单，只需要在service方�
 ----
 spring boot 1.5.10
 spring framework 4.3.14
-
 ----
 
 
@@ -110,7 +110,9 @@ public interface UserMapper {
 
 
 == 带着问题学习
-> 带着问题学习往往起到更好的效果
+
+[tip]
+带着问题学习往往起到更好的效果
 
 问题：
 
@@ -119,9 +121,8 @@ public interface UserMapper {
 2. spring boot 涉及transaction事务的xxxAutoConfiguration都有哪些
 3. spring boot 默认生成代理的方式是cglib还是jdk
 4. 什么样的方法可以生成代理方法
-
-
 ----
+
 下面开始和笔者一起走入spring aop生成代理类的小溪，从本文开头处我们知道，生成代理类的入口是AnnotationAwareAspectJAutoProxyCreator(使用父类的方法)实例化前置方法和初始化后置方法(如果此处不太了解，请参考： https://yaoyuanyy.github.io/2019/04/21/%E7%BB%86%E8%8A%82%E7%9F%A5%E5%A4%9A%E5%B0%91%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%B8%80/[spring boot aop过程解析之阶段一 AnnotationAwareAspectJAutoProxyCreator加载和初始化]。我们直接从此处展开
 
 
@@ -184,7 +185,9 @@ protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) 
 ----
 这里我们只列出了关键代码。可以看到两个方法在判断是否生成代理类时都用到了<font color=green>(1)</font>处shouldSkip(beanClass, beanName)方法。此方法主要逻辑为获取Advisor类型的beans，如果获取到判断是否为Aspect切面相关的逻辑，否则直接走super即AbstractAutoProxyCreator.shouldSkip逻辑，这个方法默认是false。此处的重点是获取Advisor类型的beans，获取的地方是BeanFactory容器。
 调用栈为：
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091721.png[20201129091721]
+
 具体代码为：
 
 ----
@@ -211,9 +214,9 @@ public List<Advisor> findAdvisorBeans() {
 	}
 	return advisors;
 }
-
 ----
-上面方法代码使用`BeanFactoryUtils.beanNamesForTypeIncludingAncestors()`获取Advisor类型className，同时这里使用了缓存方便以后使用。然后通过beanFactory.getBean(name,Class)方法获取bean实例并返回。实际debug时，我们获取的advisorName是`org.springframework.transaction.config.internalTransactionAdvisor`，为什么是它呢，我们先看看这个东西是啥，在哪用了，代码如下
+
+上面方法代码使用 `BeanFactoryUtils.beanNamesForTypeIncludingAncestors()` 获取Advisor类型className，同时这里使用了缓存方便以后使用。然后通过 `beanFactory.getBean(name,Class)` 方法获取bean实例并返回。实际debug时，我们获取的advisorName是 `org.springframework.transaction.config.internalTransactionAdvisor` ，为什么是它呢，我们先看看这个东西是啥，在哪用了，代码如下
 
 ----
 public abstract class TransactionManagementConfigUtils {
@@ -253,18 +256,19 @@ public class ProxyTransactionManagementConfiguration extends AbstractTransaction
 		return interceptor;
 	}
 }
-
 ----
-可以看到ProxyTransactionManagementConfiguration.transactionAdvisor()方法的@Bean的name属性使用了org.springframework.transaction.config.internalTransactionAdvisor作为value，这里我们需要说下带有@Configuration和@Bean的class解析过程，带有@Bean的方法会被ConfigurationClassParser解析为一个BeanDefinition，然后将这个BeanDefinition方法DefaultListableBeanFactory.beanDefinitionMap属性中key:org.springframework.transaction.config.internalTransactionAdvisor"，value:BeanDefinition; 同时将org.springframework.transaction.config.internalTransactionAdvisor放入DefaultListableBeanFactory.beanDefinitionNames中。所以上面的BeanFactoryAdvisorRetrievalHelper.findAdvisorBeans()能通过BeanFactoryUtils.beanNamesForTypeIncludingAncestors()方法取到org.springframework.transaction.config.internalTransactionAdvisor，而beanFactory.getBean(name, Advisor.class)方法会从DefaultListableBeanFactory.beanDefinitionMap获取到key对应的value，即BeanDefinition对象，进而解析这个BeanDefinition，解析就是将BeanDefinition实例化成Bean Instance，具体体现就是生成BeanFactoryTransactionAttributeSourceAdvisor实例，解析的过程用过了动态代理，具体参见：TODO
 
-生成的BeanFactoryTransactionAttributeSourceAdvisor实例为作为value, org.springframework.transaction.config.internalTransactionAdvisor作为key放入DefaultListableBeanFactory.singletonObjects。生成BeanFactoryTransactionAttributeSourceAdvisor实例的过程中，由于用到了transactionAttributeSource和transactionInterceptor。所以，这两个实例也会以同样的方式生成。
+可以看到 `ProxyTransactionManagementConfiguration.transactionAdvisor()` 方法的@Bean的name属性使用了 `org.springframework.transaction.config.internalTransactionAdvisor` 作为value，这里我们需要说下带有@Configuration和@Bean的class解析过程，带有@Bean的方法会被ConfigurationClassParser解析为一个BeanDefinition，然后将这个BeanDefinition方法 `DefaultListableBeanFactory.beanDefinitionMap` 属性中 `key:org.springframework.transaction.config.internalTransactionAdvisor` ，value:BeanDefinition; 同时将 `org.springframework.transaction.config.internalTransactionAdvisor` 放入 `DefaultListableBeanFactory.beanDefinitionNames` 中。所以上面的 `BeanFactoryAdvisorRetrievalHelper.findAdvisorBeans()` 能通过 `BeanFactoryUtils.beanNamesForTypeIncludingAncestors()` 方法取到 `org.springframework.transaction.config.internalTransactionAdvisor` ，而 `beanFactory.getBean(name, Advisor.class)` 方法会从 `DefaultListableBeanFactory.beanDefinitionMap` 获取到key对应的value，即BeanDefinition对象，进而解析这个BeanDefinition，解析就是将BeanDefinition实例化成Bean Instance，具体体现就是生成 `BeanFactoryTransactionAttributeSourceAdvisor` 实例，解析的过程用过了动态代理，具体参见：TODO
 
-到这，和spring transaction事务相关的advisor实例就找到了，即BeanFactoryTransactionAttributeSourceAdvisor实例，他包含transactionAttributeSource、切入点：TransactionAttributeSourcePointcut和切面：transactionInterceptor拦截器。<font color=green>(1)</font>处代码shouldSkip(beanClass, beanName)方法到这就走完了，这个过程中advisor被找到放到beanFactory中，对应的advisorName放入缓存中，后面的每个beanClass和bean经过前后置方法时不必再走一遍寻找Advisor的逻辑，看见缓存中有就直接使用。
+生成的 `BeanFactoryTransactionAttributeSourceAdvisor` 实例为作为value,  `org.springframework.transaction.config.internalTransactionAdvisor` 作为key放入 `DefaultListableBeanFactory.singletonObjects` 。生成 `BeanFactoryTransactionAttributeSourceAdvisor` 实例的过程中，由于用到了 `transactionAttributeSource和transactionInterceptor` 。所以，这两个实例也会以同样的方式生成。
 
-<font color=green>(1)</font>处返回false，程序往下走<font color=green>(2)</font>处代码getAdvicesAndAdvisorsForBean，看名字我们能知道大概：获取Advisor，看下这里。又我们前面定义了`UserServiceImpl`类，我们想通过这个类来了解spring transaction事务，又因为每个beanClass和bean都会走AnnotationAwareAspectJAutoProxyCreator前后置方法。为了能快读定位到我们定义的`UserServiceImpl`，所以我们在前后置方法的`shouldSkip(bean.getClass(), beanName)`一行打个带条件的断点(breakpoint)，如下图
+到这，和spring transaction事务相关的advisor实例就找到了，即 `BeanFactoryTransactionAttributeSourceAdvisor`实例，他包含 `transactionAttributeSource` 、切入点： `TransactionAttributeSourcePointcut` 和切面： `transactionInterceptor` 拦截器。 *(1)* 处代码shouldSkip(beanClass, beanName)方法到这就走完了，这个过程中advisor被找到放到beanFactory中，对应的advisorName放入缓存中，后面的每个beanClass和bean经过前后置方法时不必再走一遍寻找Advisor的逻辑，看见缓存中有就直接使用。
+
+ *(1)* 处返回false，程序往下走 *(2)* 处代码getAdvicesAndAdvisorsForBean，看名字我们能知道大概：获取Advisor，看下这里。又我们前面定义了 `UserServiceImpl` 类，我们想通过这个类来了解spring transaction事务，又因为每个beanClass和bean都会走AnnotationAwareAspectJAutoProxyCreator前后置方法。为了能快读定位到我们定义的 `UserServiceImpl` ，所以我们在前后置方法的 `shouldSkip(bean.getClass(), beanName)` 一行打个带条件的断点(breakpoint)，如下图
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091843.png[20201129091843]
-这样只有符合条件才会停在断点上。现在我们可以一步一步debug来观察`UserServiceImpl`怎样关联spring transaction事务的。断点进入getAdvicesAndAdvisorsForBean方法。getAdvicesAndAdvisorsForBean方法做两件事：获取Advisor和判断Advisor是否能应用到目标beanClass(`UserServiceImpl`)。看代码
+
+这样只有符合条件才会停在断点上。现在我们可以一步一步debug来观察 `UserServiceImpl` 怎样关联spring transaction事务的。断点进入 `getAdvicesAndAdvisorsForBean` 方法。  `getAdvicesAndAdvisorsForBean` 方法做两件事：获取Advisor和判断Advisor是否能应用到目标beanClass(UserServiceImpl)。看代码
 
 ----
 protected List<Advisor> findEligibleAdvisors(Class<?> beanClass, String beanName) {
@@ -273,8 +277,8 @@ protected List<Advisor> findEligibleAdvisors(Class<?> beanClass, String beanName
 	// eligibleAdvisors不为空才会生成代理类
 	return eligibleAdvisors;
 }
-
 ----
+
 获取到的Advisor即是是我们刚详细阐述的BeanFactoryTransactionAttributeSourceAdvisor。下面看下判断Advisor是否能应用到目标beanClass逻辑。我们知道BeanFactoryTransactionAttributeSourceAdvisor有个pointcut属性：TransactionAttributeSourcePointcut，实例化BeanFactoryTransactionAttributeSourceAdvisor时，TransactionAttributeSourcePointcut也跟着实例化了。是否能应用到目标beanClass的逻辑就在这里，看代码
 
 ----
@@ -365,14 +369,15 @@ public TransactionAttribute parseTransactionAnnotation(AnnotatedElement ae) {
 	}
 	return null;
 }
-
 ----
-以上代码段为判断Advisor是否能应用到目标beanClass的整体逻辑，本质是遍历目标类`userServiceImpl`的方法，看看方法上是否有@Transactional注解，(这里有个前提:<font color=green> 看看方法上是否有@Transactional注解之前，会先看看这个方法是不是public修饰符的，如果不是，直接遍历下一个方法，表示这个方法不能作为生成代理类的依据，也可以理解为非public的@Transactional方法事务不起作用 </font>)，如果有@Transactional注解，获取其属性值组成的TransactionAttribute，有了TransactionAttribute，就可以说明匹配上了,从而Advisor返回给getAdvicesAndAdvisorsForBean方法，从而Advisor返回给<font color=green>(2)</font>处代码并赋值给specificInterceptors，从而可以生成代理类即<font color=green>(3)</font>处代码逻辑。通过这个Advisor会传入生成代理类的方法，代理类的拦截器和切面都是从这个Adviosr拿到的，不用的代理类的Advisor是不同的，spring transaction的Advisor是BeanFactoryTransactionAttributeSourceAdvisor，见下图；而spring Aspect的Advisor是`InstantiationModelAwarePointcutAdvisorImpl`，详情见[spring boot aop过程解析之阶段二 判断beanName或beanClass是否生成Proxy代理类](https://yaoyuanyy.github.io/2019/04/28/%E7%BB%86%E8%8A%82%E7%9F%A5%E5%A4%9A%E5%B0%91%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%BA%8C/)
+
+以上代码段为判断Advisor是否能应用到目标beanClass的整体逻辑，本质是遍历目标类 `userServiceImpl` 的方法，看看方法上是否有@Transactional注解，(这里有个前提: *看看方法上是否有@Transactional注解之前，会先看看这个方法是不是public修饰符的，如果不是，直接遍历下一个方法，表示这个方法不能作为生成代理类的依据，也可以理解为非public的@Transactional方法事务不起作用* )，如果有@Transactional注解，获取其属性值组成的TransactionAttribute，有了TransactionAttribute，就可以说明匹配上了,从而Advisor返回给getAdvicesAndAdvisorsForBean方法，从而Advisor返回给 *(2)* 处代码并赋值给specificInterceptors，从而可以生成代理类即 *(3)* 处代码逻辑。通过这个Advisor会传入生成代理类的方法，代理类的拦截器和切面都是从这个Adviosr拿到的，不用的代理类的Advisor是不同的， `spring transaction的Advisor是BeanFactoryTransactionAttributeSourceAdvisor` ，见下图；而spring Aspect的Advisor是 `InstantiationModelAwarePointcutAdvisorImpl` ，详情见 https://yaoyuanyy.github.io/2019/04/28/%E7%BB%86%E8%8A%82%E7%9F%A5%E5%A4%9A%E5%B0%91%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%BA%8C/[spring boot aop过程解析之阶段二 判断beanName或beanClass是否生成Proxy代理类] 
 
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129091959.png[20201129091959]
 
 == 生成代理类
-随着Advisor获取到了，开始执行<font color=green>(3)</font>处代码逻辑：生成事务代理类，代码`Object proxy = createProxy(bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean))`，看其方法逻辑代码
+
+随着Advisor获取到了，开始执行 *(3)* 处代码逻辑：生成事务代理类，代码 `Object proxy = createProxy(bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean))` ，看其方法逻辑代码
 
 ----
 protected Object createProxy(Class<?> beanClass, String beanName, Object[] specificInterceptors, TargetSource targetSource) {
@@ -403,12 +408,13 @@ protected Object createProxy(Class<?> beanClass, String beanName, Object[] speci
 }
 
 ----
-这个方法生成proxyFactory实例，proxyFactory是管理和配置proxys的工具类，真正负责生成代理类的类是AopProxyFactory，`AopProxyFactory.createAopProxy(this)`方法生成代理类。this为proxyFactory，从而把proxyFactory中的Advisor、targetClass、proxyTargetClass、exposeProxy一并传到JdkDynamicAopProxy或ObjenesisCglibAopProxy中，由于proxyTargetClass为true且UserServiceImpl不是接口，所以创建了ObjenesisCglibAopProxy实例，即使用cglib生成代理类
+这个方法生成proxyFactory实例，proxyFactory是管理和配置proxys的工具类，真正负责生成代理类的类是AopProxyFactory， `AopProxyFactory.createAopProxy(this)` 方法生成代理类。this为proxyFactory，从而把proxyFactory中的 `Advisor、targetClass、proxyTargetClass、exposeProxy` 一并传到 `JdkDynamicAopProxy` 或 `ObjenesisCglibAopProxy` 中，由于 `proxyTargetClass` 为true且UserServiceImpl不是接口，所以创建了 `ObjenesisCglibAopProxy` 实例，即使用cglib生成代理类
+
 image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20201129092130.png[20201129092130]
 
-下面是调用cglib的getProxy方法创建代理类，关于这里详见: https://yaoyuanyy.github.io/2019/05/28/%E7%BB%86%E8%8A%82%E7%9F%A5%E5%A4%9A%E5%B0%91%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%B8%89/[spring boot aop过程解析之阶段三 CglibAopProxy或JdkDynamicAopProxy生成Proxy代理类阶段]。与Aspect生成代理的不同的地方在：此处ProxyFactory中的Advisor是BeanFactoryTransactionAttributeSourceAdvisor，而Aspect的情况是InstantiationModelAwarePointcutAdvisorImpl，所以生成的代理类的拦截器就不同了
+下面是调用cglib的getProxy方法创建代理类，关于这里详见: https://yaoyuanyy.github.io/2019/05/28/%E7%BB%86%E8%8A%82%E7%9F%A5%E5%A4%9A%E5%B0%91%20-%20spring%20boot%20aop%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86%E8%A7%A3%E6%9E%90%E4%B9%8B%E9%98%B6%E6%AE%B5%E4%B8%89/[spring boot aop过程解析之阶段三 CglibAopProxy或JdkDynamicAopProxy生成Proxy代理类阶段]。与Aspect生成代理的不同的地方在：此处ProxyFactory中的Advisor是  `BeanFactoryTransactionAttributeSourceAdvisor` ，而Aspect的情况是 `InstantiationModelAwarePointcutAdvisorImpl` ，所以生成的代理类的拦截器就不同了
 
-spring transaction cglib方式生成代理类的过程中会遍历(遍历的逻辑在Enhancer.emitMethods)目标类的每个方法，使用cglibAopProxy的ProxyCallbackFilter.accept方法判断是否生成代理方法，具体为获取Advisor的Intercepters,获取Intercepters过程中会进行匹配判断，判断逻辑与<font color=green>(2)</font>处相同：调用TransactionAttributeSourcePointcut.matches(method,targetClass)方法判断是否匹配，在详细点说是<font color=green>看看method是否有@Transactional注解和method的修饰符是否为public，两者都满足才生成代理方法</font>，详细逻辑见如下代码
+spring transaction cglib方式生成代理类的过程中会遍历(遍历的逻辑在Enhancer.emitMethods)目标类的每个方法，使用cglibAopProxy的ProxyCallbackFilter.accept方法判断是否生成代理方法，具体为获取Advisor的Intercepters,获取Intercepters过程中会进行匹配判断，判断逻辑与 *(2)* 处相同：调用TransactionAttributeSourcePointcut.matches(method,targetClass)方法判断是否匹配，在详细点说是 *看看method是否有@Transactional注解和method的修饰符是否为public，两者都满足才生成代理方法* ，详细逻辑见如下代码
 
 ----
 public int accept(Method method) {
@@ -456,7 +462,6 @@ public List<Object> getInterceptorsAndDynamicInterceptionAdvice(Advised config, 
 	}
 	return interceptorList;
 }
-
 ----
 
 
@@ -475,8 +480,8 @@ public List<Object> getInterceptorsAndDynamicInterceptionAdvice(Advised config, 
 2. spring boot 涉及transaction事务的xxxAutoConfiguration都有哪些
 3. spring boot 默认生成代理的方式是cglib还是jdk
 4. 什么样的方法可以生成代理方法
-
 ----
+
 回答：
 
 ----
@@ -549,8 +554,6 @@ public static Collection filter(Collection c, Predicate p) {
 
 }
 可以看到，当修饰符是private时，evaluate方法返回false，从而触发iterator.remove()方法，从而生成的代理类没有这个方法的代理方法，所以这样的方法事务不会生效
-
-
 ----
 
 
@@ -565,8 +568,6 @@ org.springframework.transaction.config.internalTransactionAdvisor
 
 ProxyTransactionManagementConfiguration
 用于创建BeanFactoryTransactionAttributeSourceAdvisor，TransactionAttributeSource，TransactionInterceptor实例。只有使用cglib生成事务代理类时，ProxyTransactionManagementConfiguration才会被解析
-
-
 ----
 
 
