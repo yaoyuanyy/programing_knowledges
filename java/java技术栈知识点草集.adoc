@@ -1,0 +1,850 @@
+= java技术栈知识点草集
+:toc: left
+:toc-title: 目录
+:tip-caption: 💡
+:note-caption: ℹ️
+:important-caption: ❗
+:caution-caption: 🔥
+:warning-caption: ⚠️
+// :tip-caption: :bulb:
+// :note-caption: :information_source:
+// :important-caption: :heavy_exclamation_mark:	
+// :caution-caption: :fire:
+// :warning-caption: :warning:
+:icons: font
+
+Doc writer yaoyihao1@gmail.com
+
+== java
+
+=== 类加载过程
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20220320172640.png[20220320172640]
+    
+参考：https://juejin.cn/post/6931972267609948167#comment
+
+=== class loader
+
+==== 双亲委派机制
+
+==== 哪些组件破坏了双亲委派机制
+
+----
+jdbc tomcat spring破坏了双亲委派机制
+
+为什么Tomcat要破坏双亲委派
+我们知道，Tomcat是web容器，那么一个web容器可能需要部署多个应用程序。
+不同的应用程序可能会依赖同一个第三方类库的不同版本，但是不同版本的类库中某一个类的全路径名可能是一样的。
+如多个应用都要依赖hollis.jar，但是A应用需要依赖1.0.0版本，但是B应用需要依赖1.0.1版本。这两个版本中都有一个类是com.hollis.Test.class。
+如果采用默认的双亲委派类加载机制，那么是无法加载多个相同的类。
+所以，Tomcat破坏双亲委派原则，提供隔离的机制，为每个web容器单独提供一个WebAppClassLoader加载器。
+Tomcat的类加载机制：为了实现隔离性，优先加载 Web 应用自己定义的类，所以没有遵照双亲委派的约定，每一个应用自己的类加载器——WebAppClassLoader负责加载本身的目录下的class文件，加载不到时再交给CommonClassLoader加载，这和双亲委派刚好相反。
+----
+
+https://enfangzhong.github.io/2019/12/17/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3Java%E8%99%9A%E6%8B%9F%E6%9C%BA%E4%B9%8B%E7%A0%B4%E5%9D%8F%E5%8F%8C%E4%BA%B2%E5%A7%94%E6%B4%BE%E5%8A%A0%E8%BD%BD%E6%9C%BA%E5%88%B6/[深入理解Java虚拟机之破坏双亲委派加载机制]
+
+https://juejin.cn/post/6916314841472991239[你确定你真的理解"双亲委派"了吗?]
+
+
+
+
+=== Java8 新特性教程
+
+==== HotSpot
+
+Removal of PermGen. 
+
+==== Java 编程语言
+
+----
+Lambda 表达式是一个新的语言特性
+接口中允许添加默认方法
+Parallel Array Sorting
+Standard Encoding and Decoding Base64
+----
+
+==== Date API(日期相关API)
+
+==== 集合
+
+----
+针对存在键冲突的 HashMap 的性能改进
+新的java.util.stream包中的类提供了一个 Stream API
+----
+
+==== Concurrency
+
+----
+Classes and interfaces have been added to the java.util.concurrent package.
+Methods have been added to the java.util.concurrent.ConcurrentHashMap class to support aggregate operations based on the newly added streams facility and lambda expressions.
+Classes have been added to the java.util.concurrent.atomic package to support scalable updatable variables.
+Methods have been added to the java.util.concurrent.ForkJoinPool class to support a common pool.
+The java.util.concurrent.locks.StampedLock class has been added to provide a capability-based lock with three modes for controlling read/write access.
+----
+
+==== Tools
+
+----
+The jjs command is provided to invoke the Nashorn engine.
+The java command launches JavaFX applications.
+The java man page has been reworked.
+The jdeps command-line tool is provided for analyzing class files.
+Java Management Extensions (JMX) provide remote access to diagnostic commands.
+The jarsigner tool has an option for requesting a signed time stamp from a Time Stamping Authority (TSA).
+----
+
+https://www.oracle.com/cn/java/technologies/javase/8-whats-new.html[8-whats-new]
+
+https://www.oracle.com/java/technologies/javase/8-whats-new.html[8-whats-new]
+
+
+    
+=== 对象内存布局 and CAS
+
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=3&spm_id_from=pageDriver[Java多线程与高并发应该怎么学]
+
+=== compressed class pointer
+
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=3&spm_id_from=pageDriver[Java多线程与高并发应该怎么学]
+
+https://stuefe.de/posts/metaspace/what-is-compressed-class-space[What is Compressed Class Space?
+]
+
+
+=== volatile
+
+====  volatile 可见性和禁止指令重排
+
+cpu级的数据一致性是以cache line为单位的
+
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=5&spm_id_from=pageDriver[Java多线程与高并发应该怎么学]
+24分钟：可见性 60分钟; 内存屏障：缓存一致性协议 -> volatile 
+
+
+====  volatile 禁止指令重排
+
+----
+DCL(double check lock)需不需要volatile?
+new一个对象时使用三条指令，指令二和指令三重排序了，导致用户会使用半初始化的对象。所以需要加volatile来禁止指令重排。
+----
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210818232422.png[20210818232422]
+
+----
+多想一句：那么volatile是怎么做到禁止指令重排的呢。
+答案是：JSR内存屏障。当volatile修饰一个对象时，new前后加了xxBarrier。 NOTE: 这是一个规范，实际上jvm不是这么实现的，实际是通过 lock 实现的(通过hotspot源码的bytecodeinterpreter.cpp可以看到)
+----
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210819001418.png[20210819001418]
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=6 10分钟
+
+====  volatile在jvm中的实现代码 bytecodeinterpreter.cpp
+
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=7[Java多线程与高并发应该怎么学] 13分钟
+
+
+=== java锁
+
+==== sychronized
+
+===== sychronized锁升级过程
+
+----
+每一个线程在准备获取共享资源时： 
+第一步，检查MarkWord里面是不是放的自己的ThreadId ,如果是，表示当前线程是处于 “偏向锁” 
+第二步，如果MarkWord不是自己的ThreadId,锁升级，这时候，用CAS来执行切换，新的线程根据MarkWord里面现有的ThreadId，通知之前线程暂停，
+之前线程将Markword的内容置为空。 
+第三步，两个线程都想将自己栈中的LockRecord的地址以抢占式的方式写入到对象的mardword中，
+第四步，第三步中成功执行CAS的获得资源的线程获取到锁，失败的线程则进入自旋 
+第五步，自旋的线程在自旋过程中，成功获得资源(即之前获的资源的线程执行完成并释放了共享资源)，则整个状态依然处于 轻量级锁的状态，如果自旋失败 
+第六步，进入重量级锁的状态，这个时候，自旋的线程进行阻塞，等待之前线程执行完成并唤醒自己
+----
+
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=4[Java多线程与高并发应该怎么学] 4分钟
+
+
+===== sychronized原理，字节码层级的支持entermonitor exitmonitor; 编译层级的支持lock cmpxchg指令
+
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=5&spm_id_from=pageDriver 14分钟
+
+
+===== sychronized有锁升级，那么有锁降级吗？
+
+锁降级如果是指：sychronized的锁降级，那么是没有的；但是锁降级如果指的是读写锁(ReentantReadWriteLock)的降级，那么是有的。指的是写锁降级为读锁的过程。详见ReentantReadWriteLock的部分
+
+
+==== Lock
+
+===== ReentantLock
+
+====== Reentantlock的实现原理
+
+===== Condition实现原理
+
+===== ReentantReadWriteLock
+
+====== ReentantReadWriteLock的实现原理
+
+====== ReentantReadWriteLock使用实例
+
+====== ReentantReadWriteLock锁降级 
+
+----
+问：为什么可以锁降级，也就是说，为什么释放写锁之前可以获取读锁？
+答：你既然拿到写锁了，其他线程就没法拿到读锁或者写锁，你再（在拿到写锁的线程中）拿读锁，其实不会和其他线程的写锁发送冲突的，因为你拿到写锁到写锁释放的这段时间，其他线程是无法拿到任何锁的。
+
+问：为什么不可以锁升级，即为什么获取读锁之后不能再获取写锁？
+答：锁升级就没法做到读写互斥了。两个线程都拿到了读锁，前一个线程升级成写锁，后一个线程的读锁又没释放，所以就没法做到读写互斥了。
+
+问：为什么要进行锁降级
+锁降级中，读锁的获取的目的是 “为了保证数据的可见性”。而得到这个结论的依据是 “如果当前线程不获取读锁而是直接释放写锁，假设此刻另一个线程（记作线程 T）获取了写锁并修改了数据，那么当前线程无法感知线程 T 的数据更新”。
+这里貌似有个漏洞：如果另一个线程获取了写锁（并修改了数据），那么这个锁就被独占了，没有任何其他线程可以读到数据，更不用谈 “感知数据更新”。
+
+作者认为，锁降级说白了就是写锁的一种特殊重入机制。通过这种重入，可以减少一步流程——释放写锁后再次获取读锁。
+
+使用了锁降级，就可以减去释放写锁的步骤。直接获取读锁。效率更高。而且没有线程争用。和 “可见性” 并没有关系。我个人通过阅读源码也觉得该作者的解释更加合理。
+
+锁降级就是一种特殊的锁重入机制，JDK 使用 先获取写入锁，然后获取读取锁，最后释放写入锁 这个步骤，是为了提高获取锁的效率，而不是所谓的可见。
+----
+
+链接： https://www.jianshu.com/p/c54a86269ce9[Java 线程并发 ReadWriteLock 应用场景]
+
+整个知识点参考： https://bestzuo.cn/posts/1665595927.html[ReentrantReadWriteLock读写锁源码分析]
+
+
+==== synchronized和Lock对比
+
+===== Lock相较于Synchronized优势
+
+----
+如下：
+可中断获取锁：使用synchronized关键字获取锁的时候，如果线程没有获取到被阻塞了，那么这个时候该线程是不响应中断(interrupt)的，而使用Lock.lockInterruptibly()获取锁时被中断，线程将抛出中断异常。
+可非阻塞获取锁：使用synchronized关键字获取锁时，如果没有成功获取，只有被阻塞，而使用Lock.tryLock()获取锁时，如果没有获取成功也不会阻塞而是直接返回false。
+可限定获取锁的超时时间：使用Lock.tryLock(long time, TimeUnit unit)。
+同一个所对象上可以有多个等待队列（Conditin，类似于Object.wait()，支持公平锁模式）
+----
+
+===== Lock vs Synchronized分别适用什么样的场景
+
+===== Lock vs Synchronized知识整体
+
+参考：
+
+https://tech.youzan.com/javasuo-de-na-xie-shi-er/[Java锁的那些事儿]
+
+https://jishuin.proginn.com/p/763bfbd345d9[Synchronized和 ReentrantLock到底怎么选，我蒙了]
+
+
+
+
+
+
+=== AQS
+
+==== AQS 内部的关键是什么
+
+----
+AQS的核心：一个同步队列(双向的FIFO) 和一个同步状态(0:可用，1:被占用)
+简单来说，AQS 的实现依赖内部的同步队列（FIFO 双向队列），如果当前线程获取同步状态失败，AQS 会将该线程以及等待状态等信息构造成一个 Node，将其加入同步队列的尾部，同时阻塞当前线程，当同步状态释放时，唤醒队列的头节点。
+----
+
+自总结学习AQS步骤
+
+1. 看大牛的文章
+2. debug源码 使用合适的demo小例子很重要
+3. 看看开源组件如何使用的AQS
+4. 自己找场景使用
+
+https://bestzuo.cn/posts/3723625690.html
+
+https://javadoop.com/2017/07/20/AbstractQueuedSynchronizer-2/   
+
+http://concurrent.redspider.group/article/02/11.html
+
+
+
+
+=== HashMap   
+
+==== 属性值的含义 
+
+----
+初始值 16的原因：1，必须是2的幂次方：(n - 1) & hash等价于n%hash，散列最均匀；如果太小，4或者8，扩容比较频繁；如果太大，32或者64甚至太大，又占用内存空间 (1)
+
+
+负载因子0.75的原因。关键词：牛顿二项式  前确定的0.75，在此基础上确定的哈希表变红黑树的阈值 8
+哈希表变红黑树阈值 8的原因。关键词：泊松分布
+----
+
+(1) https://www.jianshu.com/p/7cf2d6f1096b[HashMap中为什么数组的长度为2的幂次方]
+
+
+http://www.west999.com/info/html/chengxusheji/Javajishu/20190908/4658856.html
+
+https://www.cnblogs.com/lanqingzhou/p/14360195.html
+
+https://my.oschina.net/u/4282334/blog/3403917 
+
+==== HashMap多线程下不安全的原因
+
+===== java8以前的版本
+
+rehash时可能出现链表成环
+
+https://coolshell.cn/articles/9606.html[疫苗：JAVA HASHMAP的死循环]
+
+https://zhuanlan.zhihu.com/p/345237682
+
+===== java8的版本
+因为 JDK1.8 已经修复了rehash时可能出现链表成环的问题，但是依然不建议在多线程环境下使用 HashMap！
+
+
+=== ConcurrentHashMap
+
+==== ConcurrentHashMap是如何做到线程安全的，他的数据结构是什么
+
+java8下，数据结构和HashMap一样。做到线程安全的的办法是通过 `CAS + synchronized`
+
+http://www.justdojava.com/2019/12/18/java-collection-15.1/
+
+==== ConcurrentHashMap真的安全吗？
+
+https://developer.aliyun.com/article/776568
+
+
+
+== threadLocal
+https://www.bilibili.com/video/BV1fA411b7SX/[活动作品只有马士兵老师能把ThreadLocal底层原理、内存泄漏分析的这么测透
+] 46分钟
+
+https://www.bilibili.com/video/BV1xK4y1C7aT?p=8[Java多线程与高并发应该怎么学] 20分钟
+
+-> Question：
+
+----
+A. threadLocalMap 如何解决hash碰撞的呢
+B. threadLocalMap 的Entry对象为啥是弱引用的呢
+C. threadLocalMap 的key为啥是threadLocal对象呢，用threadId可以吗
+D. threadLocal 的魔数0x61c88647的原理
+E. 为什么ThreadLocalMap 采用(线性探测法)开放地址法来解决哈希冲突? 为啥不用hashmap的链表法
+F. threadLocal 会发生内存泄漏吗
+G. ThreadLocalMap 和HashMap的区别
+H. 代码实践查看gc 后Entry的key 和value是否被回收
+----
+
+
+-> Answer:
+----
+A. threadLocalMap 如何解决hash碰撞的呢
+ThreadLocalMap 是通过线性探测法(开放地址法)来解决hash 冲突的问题
+
+B. threadLocalMap 的Entry对象为啥是弱引用的呢
+是出于 GC 考虑，当某个 ThreadLocal 已经没有强引用指向时，它被 GC 回收，那么ThreadLocalMap 里对应的 Entry 的键值会随之失效
+如果key是强引用，即使tl=null，但key的引用依然指向ThreadLocal对象，所以会造成内存泄漏，而使用弱引用则不会。
+
+C. threadLocalMap 的key为啥是threadLocal对象呢，用threadId可以吗
+使用threadId无法区分一个线程多个threadLocal的情况 
+
+D. threadLocal 的魔数0x61c88647
+HASH_INCREMENT = 0x61c88647; 
+目的是使：ThreadLocal对象的threadLocalHashCode较为均匀地分布在2的幂大小的数组中。
+即：int h = k.threadLocalHashCode & (newLen - 1) 使h的值更均匀的分布在Entry[] table的数组中。
+
+why?:
+为什么0x61c88647会使得在数组中分布更均匀呢
+answer:
+0x61c88647 = 1640531527 ≈ 2 ^ 32 * (1 - 1 / φ), φ = (√5 + 1) ÷ 2, it is an another Golden ratio Num of 32 bits.
+https://stackoverflow.com/questions/38994306/what-is-the-meaning-of-0x61c88647-constant-in-threadlocal-java
+https://juejin.cn/post/6844903648800014349 魔数部分
+
+0x61c88647与斐波那契散列有关，是斐波那契散列的一个例子，也叫黄金分隔数，0x61c88647对应的十进制为1640531527。二进制为1100001110010001000011001000111(31位)
+
+
+E. 为什么ThreadLocalMap 采用(线性探测法)开放地址法来解决哈希冲突? 为啥不用Hashmap 的链表法
+
+线性探测法一是简单，二是节省内存。同时ThreadLocal 往往存放的数据量不会特别大。简单的意思包含扩容操作的成本，扩容时重新散列数据的成本
+
+ThreadLocalMap 采用开放地址法原因
+
+hreadLocal 中看到一个属性 HASH_INCREMENT = 0x61c88647 ，0x61c88647 是一个神奇的数字，让哈希码能均匀的分布在2的N次方的数组里, 即 Entry[] table，关于这个神奇的数字google 有很多解析，这里就不重复说了
+
+ThreadLocal 往往存放的数据量不会特别大（而且key 是弱引用又会被垃圾回收，及时让数据量更小），这个时候开放地址法简单的结构会显得更省空间，同时数组的查询效率也是非常高，加上第一点的保障，冲突概率也低
+
+链地址法和开放地址法的优缺点
+开放地址法：
+    容易产生堆积问题，不适于大规模的数据存储。
+    散列函数的设计对冲突会有很大的影响，插入时可能会出现多次冲突的现象。
+    删除的元素是多个冲突元素中的一个，需要对后面的元素作处理，实现较复杂。
+
+链地址法：
+    处理冲突简单，且无堆积现象，平均查找长度短。
+    链表中的结点是动态申请的，适合构造表不能确定长度的情况。
+    删除结点的操作易于实现。只要简单地删去链表上相应的结点即可。
+    指针需要额外的空间，故当结点规模较小时，开放定址法较为节省空间。
+https://juejin.cn/post/6844903974454329358
+
+
+F. threadLocal 会发生内存泄漏吗
+ThreadLocalMap使用ThreadLocal的弱引用作为key，如果一个ThreadLocal没有外部强引用引用他，那么系统gc的时候，这个ThreadLocal势必会被回收，这样一来，ThreadLocalMap中就会出现key为null的Entry，就没有办法访问这些key为null的Entry的value，如果当前线程再迟迟不结束的话，这些key为null的Entry的value就会一直存在一条强引用链：
+Thread Ref -> Thread -> ThreaLocalMap -> Entry -> value。永远无法回收，造成内存泄露。
+
+一个具体的例子就是：如果线程是线程池的， 在线程执行完代码的时候并没有结束，只是归还给线程池，这个时候ThreadLocalMap 和里面的元素是不会回收掉的，尤其value是大对象时，就会容易造成内存泄露。
+
+从图中可以容易理解下
+    堆栈角度的对象引用图
+
+    线程角度的对象引用图
+
+G. ThreadLocalMap和 HashMap的区别。ThreadLocalMap 和HashMap的功能类似，但是实现上却有很大的不同：
+1. 数据结构
+    HashMap 的数据结构是数组+链表
+    ThreadLocalMap的数据结构仅仅是数组
+
+2. 解决hash冲突的方法，为什么这么设计
+    HashMap 是通过链地址法解决hash 冲突的问题
+    ThreadLocalMap 是通过线性探测法(linear detection method)来解决hash 冲突的问题
+
+3. Entry 内部类的引用是否为强弱引用
+    HashMap 里面的Entry 内部类的引用都是强引用
+    ThreadLocalMap里面的Entry 内部类中的key 是弱引用，value 是强引用
+
+
+H. 代码实践查看gc 后Entry的key 和value是否被回收
+ 
+https://segmentfault.com/a/1190000022663697 的反射部分
+----
+
+
+=== java线程池
+
+==== 线程的执行流程
+
+done
+
+==== 核心线程何时销毁
+
+done
+
+==== 线程池设置多少合适呢 
+
+----
+cpu密集型的设置多少，io密集型的设置多少
+CPU密集型程序: CPU 核数（逻辑）+ 1 个线程数
+I/O 密集型程序: 最佳线程数 = CPU核心数*(1/CPU利用率) = CPU核心数*(IO耗时/CPU耗时)
+我怎么知道具体的 I/O耗时和CPU耗时呢？
+怎么查看CPU利用率？ 
+APM(SkyWalking CAT zipkin)工具或者JDK自带的工具 VisualVM可以帮我们得到准确的数据，学会使用这类工具，也就可以结合理论，在调优的过程得到更优的线程个数了。
+https://www.huaweicloud.com/articles/d1f2f274673189cea78abef6809fef43.html
+   
+-> 
+具体的要结合机器是多少核心的，机器上有多少个服务，这些服务已占用了多少线程数。再加上本服务执行的任务类型，再通过APM查看具体的数值
+
+参考：https://tech.meituan.com/2020/04/02/java-pooling-pratice-in-meituan.html
+----
+
+==== 线程池运用不当导致的问题的实例
+
+https://github.com/whx123/JavaHome/blob/master/%E7%94%9F%E4%BA%A7%E9%97%AE%E9%A2%98%E5%88%86%E6%9E%90/%E7%BA%BF%E7%A8%8B%E6%B1%A0%E8%BF%90%E7%94%A8%E4%B8%8D%E5%BD%93%E5%AF%BC%E8%87%B4%E7%9A%84%E9%97%AE%E9%A2%98.md[线程池运用不当导致的问题的实例]
+
+
+
+=== jvm
+
+==== oom发生的场景和java命令查看oom的方法
+
+总结起来是四个区域：堆，栈，matespace，堆外
+
+----
+1. 堆 
+-> 可能的问题点
+☭ 代码上：① 代码上有死循环，且里面有创建对象，且溢出到循环外; ② 代码上有创建大对象
+-> 检测方法 
+☭ jmap dump堆文件出来，通过mat可视化分析
+-> 解决方法
+☭ 增加 -Xmx数值 
+-> 问题代码示例
+☭ while(true) {
+    list.add(new BigObject());
+} 
+
+2. 栈 todo
+-> 可能的问题点
+☭ 代码上：① 代码上有死循环，且里面有创建对象，且溢出到循环外; ② 代码上有创建大对象
+-> 检测方法 
+☭ dump堆文件出来，通过mat可视化分析
+-> 解决方法
+☭ 增加 -Xmx数值 
+-> 问题代码示例
+☭ while(true) {
+    list.add(new BigObject());
+} 
+----
+
+https://cloud.tencent.com/developer/article/1730910
+
+https://xie.infoq.cn/article/74d7449272c21dd9f8d706957
+
+
+== redis
+
+=== redis key的过期策略
+
+https://www.modb.pro/db/41628
+
+Starting with Redis version 4.0, a new LFU (Least Frequently Used) eviction policy was introduced. 参见 https://juejin.cn/post/6869396128228442119#heading-22[一篇看懂Redis的过期策略和内存淘汰策略]
+
+=== redis 内存淘汰策略
+
+ https://www.modb.pro/db/41628
+
+
+=== Redis实现高可用(怎么防止数据丢失)
+
+主要有以下方面来保证：
+
+==== 1.数据持久化
+----
+Redis提供了完善的持久化机制，可以把内存中的数据持久化到磁盘上，方便我们进行备份数据和快速恢复数据。
+Redis提供的数据持久化方式主要有2种：
+RDB：产生一个数据快照文件。RDB文件数据是被压缩写入的，因此RDB文件的体积要比整个实例内存要小。实例宕机恢复时，可以很短时间内迅速恢复。但缺点是：由于是某一时刻的数据快照，因此它的数据并不全
+AOF：实时追加命令的日志文件。比RDB保存更完整的数据，降低丢失数据的风险。但缺点是：随着时间增长，AOF文件会越来越大。同时，AOF文件刷盘会增加磁盘IO的负担，可能影响Redis的性能（开启每秒刷盘时）
+参考：https://cloud.tencent.com/developer/article/1730906
+----
+
+Redis集群化: 可以用redis Sentinel模式。 Redis Sentinel(哨兵)是Redis 官方推荐的高可用性(HA)解决方案。
+
+==== 2. 主从复制
+
+
+==== 3. 哨兵模式
+
+https://juejin.cn/post/6844903663362637832
+
+https://cloud.tencent.com/developer/article/1707625
+
+==== 4. 集群化
+
+https://juejin.cn/post/6844903670572646413#heading-16
+
+==== Redis 主从复制、哨兵和集群这三个有什么区别
+----
+主从复制是为了数据备份，哨兵是为了高可用，Redis主服务器挂了哨兵可以切换，集群则是因为单实例能力有限，搞多个分散压力，简短总结如下：
+主从模式：备份数据、负载均衡，一个Master可以有多个Slaves。
+sentinel发现master挂了后，就会从slave中重新选举一个master。
+cluster是为了解决单机Redis容量有限的问题，将数据按一定的规则分配到多台机器。
+sentinel着眼于高可用，Cluster提高并发量。
+1.主从模式：读写分离，备份，一个Master可以有多个Slaves。
+2.哨兵sentinel：监控，自动转移，哨兵发现主服务器挂了后，就会从slave中重新选举一个主服务器。
+3.集群：为了解决单机Redis容量有限的问题，将数据按一定的规则分配到多台机器，内存/QPS不受限于单机，可受益于分布式集群高扩展性。
+----
+
+==== 5. 自动故障恢复
+
+----
+我们在之前提到过，Redis将所有的数据都分到了16384个slots里面同时每个节点负责一部分slots。slot和节点的对应关系是多对一的关系，即每个slot只能被至多一个节点负责存储，每个节点可以负责存储多个slots。此时如果集群中的某个Master节点因为故障下线，就会导致该Master节点负责的slots不能被继续提供服务，那么整个集群就下线（CLUSTER_FAIL）了，不然客户端请求下线Master节点上的slots内的数据时总会报错。所谓的高可用指的是，即使其中一个Master节点下线，整个集群依然能够正常向外提供服务。这是如何做到的呢？`简单的来说就是让下线Master节点的Slave节点来成为新的Master节点，接管旧Master负责的所有slots向外提供服务。`比如下面的集群拓扑结构，每个Master节点带一个Slave节点。如果M2永久下线之后，那么S2就会替代M2继续向外服务。那么如果替代的S2再次下线后会怎么样呢？显然由于S2不再有Slave节点了，所以S2下线之后整个集群就下线了。为了解决这个问题，Redis还提出一个叫 Replica Migration的解决方案：当集群中的某个Master节点没有Slave节点时（称之为 Orphaned Master），其他有富余Slave节点的主节点会向该节点迁移一个Slave节点以防该节点下线之后没有子节点来替换从而导致整个集群下线。
+----
+
+参考：
+
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210823201705.png[20210823201705]
+    
+==== Redis集群 — 故障自动检测与自动恢复
+
+https://zhuanlan.zhihu.com/p/106110578
+
+https://cloud.tencent.com/developer/article/1707625
+
+
+=== redis缓存穿透，缓存击穿，缓存雪崩 布隆过滤器
+
+https://www.bilibili.com/video/BV1Yk4y1y76r?p=101&spm_id_from=pageDriver
+
+=== redis 分布式锁
+
+=== redis与mysql数据一致性
+
+https://developer.aliyun.com/article/712285
+
+58沈剑 架构师之路
+https://mp.weixin.qq.com/s?__biz=MjM5ODYxMDA5OQ==&mid=404308725&idx=1&sn=1a25ce76dd1956014ceb8a011855268e&scene=21#wechat_redirect[主从DB与cache一致性]
+
+
+
+== mysql
+
+=== Innodb
+
+
+==== Buffer Pool
+
+
+==== Buffer Pool中的LRU淘汰算法
+
+https://www.jianshu.com/p/7cb6d7d59064
+
+
+== kafka
+
+=== 可靠性的保证(kafka如何保证消息的可靠的)
+
+==== 生产者的可靠性保证
+
+通过acks和min.insync.replicas和unclean.leader.election.enable的配合，保证在Kafka配置为CP系统时，要么不工作，要么得到ack后，消息不会丢失且消息状态一致。
+
+===== acks策略
+
+----
+回答生产者的可靠性保证，即回答：
+    发消息之后有没有ack？
+    发消息收到ack后，是不是消息就不会丢失了？
+
+而Kafka通过配置来指定producer生产者在发送消息时的ack策略：
+    Request.required.acks = -1 (全量同步确认，强可靠性保证)；
+    Request.required.acks = 1 (leader 确认收到, 默认)；
+    Request.required.acks = 0 (不确认，但是吞吐量大)。
+----
+
+===== min.insync.replicas
+
+参数用于保证当前集群中处于正常同步状态的副本follower数量，当实际值小于配置值时，集群停止服务。如果配置为 N/2+1, 即多一半的数量，则在满足此条件下，通过算法保证强一致性。当不满足配置数时，牺牲可用性即停服。
+
+===== unclean.leader.election.enable
+
+异常情况下，leader挂掉，此时需要重新从follower选举leader。可以为f2或者f3。
+    
+image::https://pic1.zhimg.com/80/v2-cfe4e7eb1070a77fdc24e23c639b6e9c_1440w.jpg[f]
+
+如果选举f3为新leader, 则可能会发生消息截断，因为f3还未同步msg4的数据。Kafka通过unclean.leader.election.enable来控制在这种情况下，是否可以选举f3为leader。旧版本中默认为true,在某个版本下已默认为false，避免这种情况下消息截断地出现。
+
+===== CP or AP
+ 
+----
+如果想实现Kafka配置为 CP系统，配置需要如下:
+  request.required.acks=-1
+  min.insync.replicas = ${N/2 + 1}
+  unclean.leader.election.enable = false
+
+如果想实现Kafka配置为 AP系统，配置需要如下:
+  request.required.acks=1
+  min.insync.replicas = 1
+  unclean.leader.election.enable = false
+----
+
+
+==== broker的可靠性保证
+
+----
+- 副本机制(备份)和同步机制
+    副本机制：Kafka通过分区的多副本策略来解决消息的备份问题；同步机制：同时通过HW和LEO的标识，通过ISR和OSR的概念，一起解决数据同步一致性的问题。
+----
+
+===== 副本机制
+
+Kafka通过分区多副本即前文提到的Partition 的replica(副本) 分布在跟 partition 不相同的机器上，达到数据冗余。
+
+===== 同步机制
+
+----
+消息通过producer发送到broker之后，还会遇到很多问题：
+    Partition leader 写入成功，follower什么时候同步？
+    Leader写入成功，消费者什么时候能读到这条消息？
+    Leader写入成功后，leader重启，重启后消息状态还正常吗？
+    Leader重启，如何选举新的leader？
+这些问题集中在：消息落到broker后，集群通过何种机制来保证不同副本间的消息状态一致性。
+
+不同副本的状态同步形成了同步机制。同步机制涉及了AR、ISR、OSR、HW和LEO等概念。
+https://zhuanlan.zhihu.com/p/302704003
+----
+
+=== offset详解
+
+    offset提交上报
+
+=== 生产者发送消息到broker的过程
+
+=== 消费者从broker消费消息的过程
+
+=== kafka offset存在哪里，为啥用kafka不是其他消息组件，他最大能支持多少并发，如何保证消息的可靠的
+
+
+
+
+== io
+
+=== tcp/ip 网络
+
+https://www.bilibili.com/video/BV1Yk4y1y76r?p=58&share_source=copy_web
+
+https://www.bilibili.com/video/BV1Ji4y1M7Y1?p=1
+
+
+
+== 数据结构
+
+=== 二叉树
+
+- 二叉树：一个节点有两个子树，一个左子树，一个右子树。
+
+- 二叉查找树：每个节点都大于他的左子树，同时小于他的右子。查找实现
+
+- 二叉堆：每个节点都大于他的左右子树
+
+
+=== 算法
+
+----
+第一遍，看题目，想解法，如果十几分分想不出来直接看题解，看看别人的解法，最好能够默写出来
+第二遍，自己尝试写出
+第三遍，隔几天后再次写一下，体会+上自己的优化
+第四遍，一周过去后，再来一一遍
+第五遍，复习，例如面试前。 (不一定是五遍，而是要做出来自己的体会和思考才是最重要的。) 如果有小手指，帮忙点点。上面的方法是收到，覃超老师的指导的方法。
+下面推一波，自己使用觉得非常好的刻意练习的工具： 推荐notion辅助我们刻意练习，使用了一个月多，感觉这app真心不错，学习和工作都能用起来。 通过下面的链接，注册一个账号玩一下吧：
+----
+
+https://www.notion.so/?r=8fa23ab14e76405daa2e6efb38569c1b
+
+入门视频： https://www.bilibili.com/video/BV1gQ4y1K76r 
+入门搭建的自己的home page： https://www.bilibili.com/video/BV1Zb411H7xC
+
+附上非常好用的刻意练习模板，也是目前自己在使用的模板： https://www.notion.so/Spaced-Repetition-Battleground-c1f738213e8b4bee871999474bb17bf0
+
+从来没有那么喜欢一个工具，因为这个工具真的满足自己目前的学习和工作的需求。 如果你也喜欢一个工具帮助自己管理时间，管理自己的学习，管理自己的博客等等，这里all in one，而且还做的好。缺点就是可能需要梯子，有时候反应不断太快。 https://www.notion.so/?r=8fa23ab14e76405daa2e6efb38569c1b
+
+刻意练习不是简单重复，而是跳出自己的舒适圈，不断扩大自己的舒适圈，同时在练习的过程也是需要不断反馈和改进。
+
+
+
+== 架构
+
+=== 如何设计一个秒杀系统
+
+==== 特点
+
+ 逻辑简单，难点在于短时间有大量用户进来，因此，秒杀系统一定要满足：`高并发`，`高性能`，`高可用`，`数据一致性`
+    
+    
+image::https://raw.githubusercontent.com/yaoyuanyy/MarkdownPhotos/master/img/20210817104325.png[20210817104224]
+
+设计秒杀系统的过程中需要重点关注哪些问题
+
+1. 参与秒杀的商品属于热点数据，我们该如何处理热点数据？
+2. 商品的库存有限，在面对大量订单的情况下，如何解决超卖的问题？
+3. 如果系统用了消息队列，如何保证消息队列不丢失消息？
+4. 如何保证秒杀系统的高可用？
+5. 如何对项目进行压测？有哪些工具？
+
+
+==== 高并发
+
+1. 热点数据问题
+    热点数据放在 Redis 中。最好写入到jvm 内存一份，jvm 内存中的数据访问速度是最快的
+
+2. 流量削峰
+    消息队列
+    回答问题/验证码
+
+==== 高可用
+
+1. 集群化
+
+2. 限流
+
+ 限流是从用户访问压力的角度来考虑如何应对系统故障。限流是为了对服务端的接口接受请求的频率进行限制，防止服务挂掉。线程组件：Sentinel 、Hystrix等
+
+3. 排队
+ 
+ 你可以把排队看作是限流的一个变种。限流是直接拒绝了用户的请求，而排队则是让用户等待一定的时间（类比现实世界的排队）。
+
+4. 降级
+
+ 降级是从系统功能优先级的角度考虑如何应对系统故障。NOTE:`降级的核心思想就是丢车保帅，优先保证核心业务`
+
+5. 熔断
+
+ 熔断和降级是两个比较容易混淆的概念，两者的含义并不相同。降级的目的在于应对系统自身的故障，而熔断的目的在于应对当前系统依赖的外部系统或者第三方系统的故障。
+
+ 熔断可以防止因为秒杀交易影响到其他正常服务的提供:
+   举个例子： 秒杀功能位于服务 A 上，服务 A 上同时还有其他的一些功能比如商品管理。如果服务 A 上的商品管理接口响应非常慢的话，熔断调这个接口，使其他服务不能再请求服务 A上的商品管理这个接口，从而有效避免其他服务被拖慢甚至拖死
+
+
+==== 一致性
+
+- 1. 减库存方案 - 不超卖
+----
+    对应到代码层面，我们应该如何保证不会超卖呢？我们一般会提前将秒杀商品的信息放到缓存中去。我们可以通过 Redis 对库存进行原子操作。
+    伪代码如下：
+    Long count = redisTemplate.increment(key, -1);
+    if (count >= 0) {
+        ......
+    }else{
+    ......
+    }
+----
+
+- 2. 接口幂等
+
+----
+a. 同步锁
+b. 分布式锁 Redis的Redisson 
+c. 业务字段的唯一索性约束，防止重复数据产生
+----
+
+==== 性能测试
+----
+上线之前压力测试是必不可少的。推荐 4个比较常用的性能测试工具：
+    Jmeter ：Apache JMeter 是 JAVA 开发的性能测试工具。
+    LoadRunner：一款商业的性能测试工具。
+    Galtling ：一款基于 Scala 开发的高性能服务器性能测试工具。
+    ab ：全称为 Apache Bench 。Apache 旗下的一款测试工具，非常实用。
+----
+
+
+参考： https://xiaozhuanlan.com/topic/4918673052[「系统设计面试题」如何设计一个秒杀系统？]
+
+
+
+=== 如何设计一个RPC系统
+
+----
+实现一个最基本的 RPC 框架应该至少包括下面几部分:
+    注册中心 ：注册中心负责服务地址的注册与查找，相当于目录服务。
+    网络传输 ：既然我们要调用远程的方法，就要发送网络请求来传递目标类和方法的信息以及方法的参数等数据到服务提供端。
+    序列化和反序列化 ：要在网络传输数据就要涉及到序列化。
+    动态代理 ：屏蔽程方法调用的底层细节。
+    负载均衡 ： 避免单个服务器响应同一请求，容易造成服务器宕机、崩溃等问题。
+    传输协议 ：这个协议是客户端（服务消费方）和服务端（服务提供方）交流的基础。
+
+https://xiaozhuanlan.com/topic/8472610953
+
+https://www.niewenjun.com/2020/04/16/kuang-jia/wei-fu-wu/ru-he-she-ji-yi-ge-rpc-kuang-jia/
+----
+
+=== 架构心得
+
+----
+    最后，分享一下做大型应用的架构心得：
+
+        灰度！灰度！灰度！
+
+        监控！监控！监控！
+
+        告警！告警！告警！
+
+        缓存！缓存！缓存！
+
+        限流！熔断！降级！
+
+        低耦合，高内聚！
+
+        避免单点，拥抱无状态！
+
+        评估！评估！评估！
+
+        压测！压测！压测！
+----
+
+
+ 
+
+
+
