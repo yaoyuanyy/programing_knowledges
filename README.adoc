@@ -9,6 +9,9 @@
 
 - https://github.com/yaoyuanyy/programing_knowledges/blob/master/java/%E4%B8%8D%E7%9F%A5%E9%81%93javaagent%E6%98%AF%E4%BB%80%E4%B9%88%2C%E8%BF%90%E8%A1%8C%E4%B8%AAhello%20world%E5%B0%B1%E7%9F%A5%E9%81%93%E4%BA%86.adoc[不知道javaagent是什么,运行个hello world就知道了]
 
+- https://github.com/yaoyuanyy/programing_knowledges/blob/master/java/java%E6%8A%80%E6%9C%AF%E6%A0%88%E7%9F%A5%E8%AF%86%E7%82%B9%E8%8D%89%E9%9B%86.adoc[java技术栈知识点草集
+]
+
 
 
 == spring 
